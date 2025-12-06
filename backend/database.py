@@ -30,7 +30,8 @@ engine = create_engine(
     pool_recycle=3600,  # Recycle connections after 1 hour
     echo=settings.DEBUG,
     connect_args={
-        "options": "-c timezone=utc"  # Set timezone to UTC
+        "options": "-c timezone=utc",  # Set timezone to UTC
+        "sslmode": "require"  # Require SSL for Render Postgres
     }
 )
 
