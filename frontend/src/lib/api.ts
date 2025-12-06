@@ -430,6 +430,7 @@ export const studyPlansApi = {
     subjects: string[];
     available_hours_per_day: number;
     exam_date: string;
+    focus_areas?: Record<string, string[]>;
   }) => apiClient.post("/study-plans/generate", data),
 
   getActive: () => apiClient.get("/study-plans/active"),

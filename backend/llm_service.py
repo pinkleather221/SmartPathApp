@@ -176,6 +176,29 @@ class LLMService:
     
     def _get_fallback_response(self, prompt: str) -> str:
         """Return fallback response when LLM is unavailable."""
+        # For study plan generation, return a basic structure
+        if "study plan" in prompt.lower():
+            # Extract subjects from prompt if possible
+            subjects = []
+            if "Subjects to Study:" in prompt:
+                subjects_part = prompt.split("Subjects to Study:")[1].split("\n")[0]
+                subjects = [s.strip() for s in subjects_part.split(",")]
+            if not subjects:
+                subjects = ["Mathematics", "Physics"]  # Default fallback
+
+            # Create basic focus areas
+            focus_areas = {}
+            strategies = {}
+            for subject in subjects:
+                focus_areas[subject] = f"Core concepts and fundamentals of {subject}"
+                strategies[subject] = f"Study {subject} regularly with practice exercises and review sessions."
+
+            return json.dumps({
+                "weekly_schedule": [],
+                "focus_areas": focus_areas,
+                "strategies": strategies,
+                "recommendations": ["Study regularly for consistent progress"]
+            })
         return json.dumps({"error": "LLM service temporarily unavailable", "message": "Please try again later"})
     
     # ==================== FLASHCARD GENERATION ====================
@@ -570,7 +593,8 @@ Return ONLY a JSON array of exactly 5 career recommendations, sorted by match_sc
         weak_subjects: List[str],
         available_hours: float,
         exam_date: Optional[datetime] = None,
-        grade_level: int = 10
+        grade_level: int = 10,
+        focus_areas: Optional[Dict[str, List[str]]] = None
     ) -> Dict[str, Any]:
         """Generate personalized study plan."""
         if exam_date:
@@ -585,11 +609,23 @@ Return ONLY a JSON array of exactly 5 career recommendations, sorted by match_sc
         else:
             days_until_exam = 90
         
+        # Build focus areas section for prompt
+        focus_areas_text = ""
+        if focus_areas and len(focus_areas) > 0:
+            focus_areas_list = []
+            for subject, topics in focus_areas.items():
+                if topics and len(topics) > 0:
+                    topics_str = ", ".join(topics)
+                    focus_areas_list.append(f"{subject}: {topics_str}")
+            if focus_areas_list:
+                focus_areas_text = f"\n\nSpecific Focus Areas Requested by Student:\n" + "\n".join(f"- {item}" for item in focus_areas_list)
+                focus_areas_text += "\n\nIMPORTANT: The study plan MUST prioritize and include these specific topics. Allocate more time to these focus areas in the weekly schedule."
+        
         prompt = f"""Create a detailed weekly study plan for a Grade {grade_level} Kenyan student.
 
-Weak Subjects: {', '.join(weak_subjects)}
+Subjects to Study: {', '.join(weak_subjects)}
 Available Hours per Day: {available_hours}
-Days until Exam: {days_until_exam}
+Days until Exam: {days_until_exam}{focus_areas_text}
 
 Provide a study plan in JSON format:
 {{
@@ -597,47 +633,127 @@ Provide a study plan in JSON format:
     {{
       "day": "Monday",
       "subjects": [
-        {{"subject": "Mathematics", "duration_minutes": 60, "focus": "Algebra", "priority": 8}}
+        {{"subject": "Mathematics", "duration_minutes": 60, "focus": "Calculus - Derivatives and Limits", "priority": 8}}
       ]
     }},
     ...
   ],
+  "focus_areas": {{
+    "Mathematics": "Specific focus areas for Mathematics (e.g., Calculus, Algebra, Geometry)"
+  }},
   "strategies": {{
-    "subject": "Study strategy for this subject"
+    "Mathematics": "Detailed study strategy focusing on the requested topics (e.g., Calculus). Include specific techniques, practice methods, and review schedules."
   }},
   "recommendations": ["tip1", "tip2", ...]
 }}
 
-Allocate more time to weaker subjects. Include specific topics to focus on."""
+CRITICAL REQUIREMENTS:
+1. If specific focus areas are provided, you MUST prioritize and explicitly mention those topics in:
+   - The "focus_areas" field for that subject
+   - The "strategies" field for that subject  
+   - The "focus" field in weekly_schedule entries for that subject
+
+2. For focus_areas field: 
+   - If user specified topics (e.g., "Calculus, Derivatives"), your focus_areas should expand on these
+   - Example: If user says "Calculus, Derivatives", your focus_areas["Mathematics"] should be something like:
+     "Calculus (Derivatives, Limits, Applications), Algebra fundamentals, Problem-solving techniques"
+   - DO NOT use generic phrases like "Core concepts and fundamentals" - be SPECIFIC
+
+3. For strategies field:
+   - Must explicitly mention the requested focus topics
+   - Provide specific study techniques for those topics
+   - Example: "Focus on mastering Calculus derivatives through daily practice problems. Start with basic derivative rules, then progress to chain rule and product rule. Use visual aids to understand limits and continuity concepts."
+
+4. For weekly_schedule:
+   - Each subject entry should have a "focus" field that mentions the specific topics
+   - Example: "Calculus - Derivatives and Chain Rule" or "Algebra - Quadratic Equations and Factoring"
+
+5. Allocate more time to weaker subjects
+6. Distribute study time across the week for balanced learning
+7. Ensure each subject gets adequate time based on priority
+
+Example Response Format:
+If Mathematics with focus on "Calculus, Derivatives" is requested:
+{{
+  "focus_areas": {{
+    "Mathematics": "Calculus (Derivatives, Limits, Continuity), Advanced Algebra, Problem-solving strategies"
+  }},
+  "strategies": {{
+    "Mathematics": "Master Calculus derivatives through systematic practice. Day 1-2: Basic derivative rules (power, product, quotient). Day 3-4: Chain rule and composite functions. Day 5-6: Applications of derivatives (optimization, related rates). Review limits and continuity weekly. Practice 10-15 derivative problems daily."
+  }},
+  "weekly_schedule": [
+    {{
+      "day": "Monday",
+      "subjects": [
+        {{"subject": "Mathematics", "duration_minutes": 90, "focus": "Calculus - Basic Derivative Rules", "priority": 8}}
+      ]
+    }}
+  ]
+}}"""
+        
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # Log the request details
+        logger.info(f"Generating study plan for subjects: {weak_subjects}, focus_areas: {focus_areas}")
         
         try:
             response = await self.generate(prompt, json_mode=True)
             if not response:
+                logger.warning("Empty response from LLM, using fallback")
                 raise ValueError("Empty response from LLM")
+            
+            # Log raw response for debugging (first 500 chars)
+            logger.debug(f"LLM raw response (first 500 chars): {response[:500]}")
+            
             parsed_response = json.loads(response)
             if not isinstance(parsed_response, dict):
+                logger.warning(f"Invalid response format from LLM: {type(parsed_response)}")
                 raise ValueError("Invalid response format from LLM")
+            
+            # Validate that we got AI-generated content, not just empty structures
+            has_weekly_schedule = bool(parsed_response.get("weekly_schedule"))
+            has_focus_areas = bool(parsed_response.get("focus_areas"))
+            has_strategies = bool(parsed_response.get("strategies"))
+            
+            logger.info(f"LLM response validation - weekly_schedule: {has_weekly_schedule}, focus_areas: {has_focus_areas}, strategies: {has_strategies}")
+            
+            # If we have focus_areas from user, ensure LLM addressed them
+            if focus_areas and has_focus_areas:
+                for subject, topics in focus_areas.items():
+                    llm_focus = parsed_response.get("focus_areas", {}).get(subject, "")
+                    if topics and subject in parsed_response.get("focus_areas", {}):
+                        logger.info(f"LLM generated focus_areas for {subject}: {llm_focus[:100]}")
+                    else:
+                        logger.warning(f"LLM did not generate focus_areas for {subject} with requested topics: {topics}")
+            
             return parsed_response
+            
         except json.JSONDecodeError as e:
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.error(f"Study plan JSON decode error: {e}. Response: {response[:200] if response else 'None'}")
-            # Return a basic structure so the plan can still be created
-            return {
-                "weekly_schedule": [],
-                "strategies": {subject: f"Focus on key concepts and practice regularly" for subject in weak_subjects},
-                "recommendations": ["Study regularly", "Take breaks", "Review notes daily"]
-            }
+            logger.error(f"Study plan JSON decode error: {e}")
+            logger.error(f"Response (first 500 chars): {response[:500] if 'response' in locals() else 'No response'}")
+            
+            # Try to extract JSON from the response if it's wrapped in markdown
+            if 'response' in locals() and response:
+                try:
+                    import re
+                    # Try to find JSON object or array
+                    json_match = re.search(r'\{[\s\S]*\}|\[[\s\S]*\]', response)
+                    if json_match:
+                        parsed_response = json.loads(json_match.group())
+                        logger.info("Successfully extracted JSON from markdown-wrapped response")
+                        return parsed_response
+                except Exception as extract_error:
+                    logger.error(f"Failed to extract JSON from response: {extract_error}")
+            
+            # Only use fallback if we truly can't parse the response
+            logger.warning("Using fallback response due to JSON decode error")
+            raise ValueError(f"Failed to parse LLM response as JSON: {str(e)}")
+            
         except Exception as e:
-            import logging
-            logger = logging.getLogger(__name__)
             logger.error(f"Study plan generation error: {e}", exc_info=True)
-            # Return a basic structure so the plan can still be created
-            return {
-                "weekly_schedule": [],
-                "strategies": {subject: f"Focus on key concepts and practice regularly" for subject in weak_subjects},
-                "recommendations": ["Study regularly", "Take breaks", "Review notes daily"]
-            }
+            # Re-raise to let the service layer handle it
+            raise
     
     # ==================== LEARNING STRATEGIES ====================
     

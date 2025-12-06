@@ -48,6 +48,7 @@ const GenerateStudyPlan = () => {
       focus?: string;
     }>;
     focusAreas: Record<string, string>;
+    strategies?: Record<string, string>;
     plans: unknown[];
   } | null>(null);
 
@@ -86,11 +87,21 @@ const GenerateStudyPlan = () => {
         description: "AI is creating your personalized study schedule. This may take a moment.",
       });
 
+      // Prepare focus areas - convert Record<string, string> to Dict<string, List[str]]
+      const focusAreasDict: Record<string, string[]> = {};
+      Object.entries(focusAreas).forEach(([subject, topics]) => {
+        if (topics && topics.trim()) {
+          // Split by comma and clean up
+          focusAreasDict[subject] = topics.split(',').map(t => t.trim()).filter(t => t.length > 0);
+        }
+      });
+
       const plans = await Promise.race([
         studyPlansApi.generate({
           subjects: selectedSubjects,
           available_hours_per_day: hoursPerDay[0],
           exam_date: examDate!.toISOString(),
+          focus_areas: Object.keys(focusAreasDict).length > 0 ? focusAreasDict : undefined,
         }),
         new Promise((_, reject) =>
           setTimeout(() => reject(new Error("Request timeout. Please try again.")), 120000)
@@ -99,19 +110,45 @@ const GenerateStudyPlan = () => {
 
       if (plans && Array.isArray(plans) && plans.length > 0) {
         // Transform the API response to match preview format
+        // Use the first plan's weekly_schedule, or combine all if needed
         const firstPlan = plans[0];
+        const allWeeklySchedules = plans
+          .map((p: { weekly_schedule?: unknown[] }) => p.weekly_schedule || [])
+          .flat()
+          .filter(Boolean);
+        
+        // Use the first plan's schedule, or combine all schedules, or generate fallback
+        const weeklySchedule = firstPlan.weekly_schedule && firstPlan.weekly_schedule.length > 0
+          ? firstPlan.weekly_schedule
+          : allWeeklySchedules.length > 0
+          ? allWeeklySchedules
+          : generateWeeklySchedule();
+        
+        // Build focus areas from all plans
+        const focusAreas = plans.reduce((acc: Record<string, string>, plan: { subject?: string; focus_area?: string; strategy?: string }) => {
+          if (plan.subject) {
+            // Use focus_area if available, otherwise use strategy, otherwise default
+            acc[plan.subject] = plan.focus_area || plan.strategy || `Focus on core concepts and practice regularly for ${plan.subject}`;
+          }
+          return acc;
+        }, {});
+        
+        // Build strategies map
+        const strategies = plans.reduce((acc: Record<string, string>, plan: { subject?: string; strategy?: string }) => {
+          if (plan.subject && plan.strategy) {
+            acc[plan.subject] = plan.strategy;
+          }
+          return acc;
+        }, {});
+        
         const transformedPlan = {
           plan_id: firstPlan.plan_id,
           subjects: selectedSubjects,
           hoursPerDay: hoursPerDay[0],
           examDate: new Date(examDate!),
-          weeklySchedule: firstPlan.weekly_schedule || generateWeeklySchedule(),
-          focusAreas: plans.reduce((acc: Record<string, string>, plan: { subject?: string; focus_area?: string }) => {
-            if (plan.focus_area && plan.subject) {
-              acc[plan.subject] = plan.focus_area;
-            }
-            return acc;
-          }, {}),
+          weeklySchedule: weeklySchedule,
+          focusAreas: focusAreas,
+          strategies: strategies,
           plans: plans, // Store all plans for saving
         };
         
@@ -386,16 +423,22 @@ const GenerateStudyPlan = () => {
                   </div>
                 </div>
 
-                {previewPlan.focusAreas && Object.keys(previewPlan.focusAreas).length > 0 && (
+                {(previewPlan.focusAreas && Object.keys(previewPlan.focusAreas).length > 0) && (
                   <>
                     <Separator />
                     <div>
-                      <h3 className="font-semibold mb-2">Focus Areas</h3>
-                      <div className="space-y-2">
+                      <h3 className="font-semibold mb-2">Focus Areas & Strategies</h3>
+                      <div className="space-y-3">
                         {Object.entries(previewPlan.focusAreas).map(([subject, focus]) => (
-                          <div key={subject} className="p-2 rounded-lg bg-muted">
-                            <p className="text-sm font-medium">{subject}</p>
-                            <p className="text-sm text-muted-foreground">{focus}</p>
+                          <div key={subject} className="p-3 rounded-lg bg-muted border">
+                            <p className="text-sm font-semibold mb-1">{subject}</p>
+                            <p className="text-sm text-muted-foreground mb-2">{focus || "Focus on core concepts and practice regularly"}</p>
+                            {previewPlan.strategies && previewPlan.strategies[subject] && (
+                              <div className="mt-2 pt-2 border-t border-border/50">
+                                <p className="text-xs font-medium text-muted-foreground mb-1">Study Strategy:</p>
+                                <p className="text-xs text-muted-foreground">{previewPlan.strategies[subject]}</p>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>

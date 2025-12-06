@@ -305,18 +305,55 @@ class StudyPlanResponse(BaseModel):
     """Study plan response model."""
     plan_id: int
     subject: str
-    focus_area: Optional[str]
+    focus_area: str = Field(default="", description="Areas to focus on for this subject")
     start_date: datetime
     end_date: datetime
     daily_duration_minutes: int
     priority: int
     status: PlanStatus
     # Expose as 'strategy' to clients, map from DB field 'study_strategy'
-    strategy: Optional[str] = Field(None, alias="study_strategy")
+    strategy: str = Field(default="", alias="study_strategy", description="Study strategy for this subject")
     # Expose as 'weekly_schedule' to clients, map from DB field 'weekly_schedule_json'
-    weekly_schedule: Optional[List[Dict[str, Any]]] = Field(None, alias="weekly_schedule_json")
-    sessions: Optional[List["StudySessionResponse"]] = None
+    weekly_schedule: List[Dict[str, Any]] = Field(default_factory=list, alias="weekly_schedule_json", description="Weekly study schedule")
+    sessions: List["StudySessionResponse"] = Field(default_factory=list, description="Study sessions")
     created_at: datetime
+    
+    @classmethod
+    def model_validate(cls, obj, **kwargs):
+        """Override to ensure no null values."""
+        # Handle both dict and SQLAlchemy objects
+        if isinstance(obj, dict):
+            # Ensure focus_area is never null
+            if obj.get("focus_area") is None or obj.get("focus_area") == "":
+                obj["focus_area"] = "Focus on core concepts and practice regularly"
+            # Ensure study_strategy is never null
+            if obj.get("study_strategy") is None or obj.get("study_strategy") == "":
+                subject = obj.get("subject", "this subject")
+                obj["study_strategy"] = (
+                    f"Study {subject} daily for consistent progress. "
+                    f"Break down topics into manageable chunks, practice regularly, "
+                    f"and review previous lessons weekly."
+                )
+            # Ensure weekly_schedule_json is never null
+            if obj.get("weekly_schedule_json") is None:
+                obj["weekly_schedule_json"] = []
+            # Ensure sessions is never null
+            if obj.get("sessions") is None:
+                obj["sessions"] = []
+        else:
+            # Handle SQLAlchemy objects
+            if hasattr(obj, "focus_area") and (obj.focus_area is None or obj.focus_area == ""):
+                obj.focus_area = "Focus on core concepts and practice regularly"
+            if hasattr(obj, "study_strategy") and (obj.study_strategy is None or obj.study_strategy == ""):
+                subject = getattr(obj, "subject", "this subject")
+                obj.study_strategy = (
+                    f"Study {subject} daily for consistent progress. "
+                    f"Break down topics into manageable chunks, practice regularly, "
+                    f"and review previous lessons weekly."
+                )
+            if hasattr(obj, "weekly_schedule_json") and obj.weekly_schedule_json is None:
+                obj.weekly_schedule_json = []
+        return super().model_validate(obj, **kwargs)
     
     model_config = {"from_attributes": True, "populate_by_name": True}
 

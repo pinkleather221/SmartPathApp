@@ -715,13 +715,26 @@ async def generate_study_plan(
     """Generate a personalized study plan."""
     try:
         logger.info(f"Generating study plan for user {current_user.user_id} with subjects: {request.subjects}")
+        if request.focus_areas:
+            logger.info(f"Focus areas provided: {request.focus_areas}")
+        else:
+            logger.info("No focus areas provided - will generate general study plan")
+        
         plans = await StudyPlanService.generate_study_plan(
             db=db,
             user_id=current_user.user_id,
             subjects=request.subjects,
             available_hours=request.available_hours_per_day,
-            exam_date=request.exam_date
+            exam_date=request.exam_date,
+            focus_areas=request.focus_areas
         )
+        
+        # Log response details for debugging
+        if plans:
+            logger.info(f"Generated {len(plans)} study plans")
+            for plan in plans:
+                logger.debug(f"Plan for {plan.subject}: focus_area={plan.focus_area[:100] if plan.focus_area else 'None'}, "
+                          f"strategy_length={len(plan.study_strategy) if plan.study_strategy else 0}")
         
         if not plans:
             raise HTTPException(

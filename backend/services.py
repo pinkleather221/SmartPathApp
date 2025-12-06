@@ -15,7 +15,7 @@ from database import (
 from models import (
     ReportAnalysis, SubjectPerformanceResponse, PerformanceDashboard,
     GradeTrend, PerformancePrediction, FlashcardResponse, CareerRecommendationResponse,
-    StudyPlanResponse, LearningInsightResponse, AcademicFeedback
+    StudyPlanResponse, StudySessionResponse, LearningInsightResponse, AcademicFeedback
 )
 from utils import (
     grade_to_numeric, grade_to_gpa, calculate_gpa, analyze_grade_trend,
@@ -524,7 +524,8 @@ class StudyPlanService:
         user_id: int,
         subjects: List[str],
         available_hours: float,
-        exam_date: Optional[datetime] = None
+        exam_date: Optional[datetime] = None,
+        focus_areas: Optional[Dict[str, List[str]]] = None
     ) -> List[StudyPlan]:
         """Generate study plans using LLM."""
         # Get weak subjects
@@ -536,17 +537,75 @@ class StudyPlanService:
         
         weak_subject_names = [sp.subject for sp in weak_subjects] if weak_subjects else subjects
         
-        # Get LLM plan
-        plan_data = await llm_service.generate_study_plan(
-            weak_subjects=weak_subject_names,
-            available_hours=available_hours,
-            exam_date=exam_date
-        )
+        # Get user's grade level for better LLM context
+        user = db.query(User).filter(User.user_id == user_id).first()
+        grade_level = user.grade_level if user and user.grade_level else 10
+        
+        # Get LLM plan with retry logic
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        plan_data = None
+        max_retries = 2
+        for attempt in range(max_retries):
+            try:
+                logger.info(f"Attempting to generate study plan (attempt {attempt + 1}/{max_retries})")
+                plan_data = await llm_service.generate_study_plan(
+                    weak_subjects=weak_subject_names,
+                    available_hours=available_hours,
+                    exam_date=exam_date,
+                    grade_level=grade_level,
+                    focus_areas=focus_areas
+                )
+                logger.info("Successfully received LLM response")
+                break
+            except Exception as e:
+                logger.warning(f"LLM call failed (attempt {attempt + 1}/{max_retries}): {e}")
+                if attempt == max_retries - 1:
+                    # Last attempt failed, use fallback
+                    logger.error("All LLM attempts failed, using fallback")
+                    plan_data = {
+                        "weekly_schedule": [],
+                        "focus_areas": {},
+                        "strategies": {},
+                        "recommendations": ["Study regularly for consistent progress"]
+                    }
+                else:
+                    # Wait a bit before retry
+                    import asyncio
+                    await asyncio.sleep(1)
         
         # Create study plans
         plans = []
         weekly_schedule = plan_data.get("weekly_schedule", [])
         strategies = plan_data.get("strategies", {})
+        focus_areas_from_llm = plan_data.get("focus_areas", {})
+        recommendations = plan_data.get("recommendations", [])
+        
+        # Log what we received from LLM
+        logger.info(f"LLM returned: weekly_schedule={len(weekly_schedule)} entries, "
+                   f"focus_areas={len(focus_areas_from_llm)} subjects, "
+                   f"strategies={len(strategies)} subjects, "
+                   f"recommendations={len(recommendations)} items")
+
+        # Generate default weekly schedule if LLM didn't provide one
+        if not weekly_schedule:
+            from datetime import timedelta
+            days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+            weekly_schedule = []
+            for i, day in enumerate(days):
+                # Distribute subjects across the week
+                subject_index = i % len(subjects) if subjects else 0
+                if subjects:
+                    weekly_schedule.append({
+                        "day": day,
+                        "subjects": [{
+                            "subject": subjects[subject_index],
+                            "duration_minutes": int((available_hours * 60) / len(subjects)),
+                            "focus": f"Review key concepts and practice problems",
+                            "priority": 8 if subjects[subject_index] in weak_subject_names else 5
+                        }]
+                    })
 
         for subject in subjects:
             # Calculate duration based on priority
@@ -556,16 +615,81 @@ class StudyPlanService:
 
             daily_duration = int((available_hours * 60) / len(subjects))
 
+            # Get or generate focus area - prioritize user-specified focus areas, then LLM-generated
+            focus_area = ""
+            if focus_areas and subject in focus_areas and focus_areas[subject]:
+                topics = ", ".join(focus_areas[subject])
+                # Use LLM-generated focus area if available, but incorporate user topics
+                if focus_areas_from_llm.get(subject):
+                    llm_focus = str(focus_areas_from_llm[subject] or "").strip()
+                    if llm_focus and llm_focus != f"Core concepts and fundamentals of {subject}":
+                        # LLM provided specific focus areas, use them but ensure user topics are mentioned
+                        focus_area = f"{llm_focus} (Emphasizing: {topics})"
+                        logger.info(f"Using LLM-generated focus area for {subject} with user topics: {focus_area[:100]}")
+                    else:
+                        focus_area = f"Focus on: {topics}"
+                else:
+                    focus_area = f"Focus on: {topics}"
+            elif focus_areas_from_llm.get(subject):
+                focus_area = str(focus_areas_from_llm[subject] or "").strip()
+                if focus_area and focus_area != f"Core concepts and fundamentals of {subject}":
+                    logger.info(f"Using LLM-generated focus area for {subject}: {focus_area[:100]}")
+                else:
+                    focus_area = f"Focus on core concepts and practice regularly for {subject}"
+            elif (strategies.get(subject) or "").strip():
+                # Use strategy as focus area if it's specific (not generic)
+                strategy_text = (strategies.get(subject) or "").strip()
+                if len(strategy_text) > 50 and "core concepts" not in strategy_text.lower():
+                    focus_area = strategy_text[:200]  # Use first 200 chars of strategy
+                    logger.info(f"Using strategy as focus area for {subject}: {focus_area[:100]}")
+                else:
+                    focus_area = f"Focus on core concepts, practice problems, and regular review sessions for {subject}"
+            else:
+                focus_area = f"Focus on core concepts, practice problems, and regular review sessions for {subject}"
+
+            # Get or generate study strategy - incorporate user-specified focus areas
+            study_strategy = (strategies.get(subject) or "").strip()
+            if not study_strategy:
+                if focus_areas and subject in focus_areas and focus_areas[subject]:
+                    topics = ", ".join(focus_areas[subject])
+                    study_strategy = (
+                        f"Study {subject} for {daily_duration} minutes daily, with emphasis on: {topics}. "
+                        f"Break down these topics into manageable chunks, practice regularly with exercises specific to these areas, "
+                        f"and review previous lessons weekly. Use active recall techniques and solve practice problems "
+                        f"focused on {topics} to reinforce learning."
+                    )
+                else:
+                    study_strategy = (
+                        f"Study {subject} for {daily_duration} minutes daily. "
+                        f"Break down topics into manageable chunks, practice regularly, "
+                        f"and review previous lessons weekly. Use active recall techniques "
+                        f"and solve practice problems to reinforce learning."
+                    )
+            
+            # Update weekly schedule to include focus areas if specified
+            if focus_areas and subject in focus_areas and focus_areas[subject]:
+                topics = ", ".join(focus_areas[subject])
+                # Update the weekly schedule entries for this subject
+                for day_schedule in weekly_schedule:
+                    if "subjects" in day_schedule:
+                        for subj_entry in day_schedule["subjects"]:
+                            if isinstance(subj_entry, dict) and subj_entry.get("subject") == subject:
+                                existing_focus = subj_entry.get("focus", "")
+                                if existing_focus:
+                                    subj_entry["focus"] = f"{topics} - {existing_focus}"
+                                else:
+                                    subj_entry["focus"] = topics
+
             plan = StudyPlan(
                 user_id=user_id,
                 subject=subject,
-                focus_area=strategies.get(subject, ""),
+                focus_area=focus_area,
                 start_date=datetime.utcnow(),
                 end_date=exam_date if exam_date else (datetime.utcnow() + timedelta(days=90)),
                 daily_duration_minutes=daily_duration,
                 priority=priority,
                 status=PlanStatus.ACTIVE,
-                study_strategy=strategies.get(subject),
+                study_strategy=study_strategy,
                 weekly_schedule_json=weekly_schedule  # Persist the weekly schedule
             )
             db.add(plan)
