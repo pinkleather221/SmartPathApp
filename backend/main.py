@@ -11,7 +11,8 @@ from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File, F
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.security import OAuth2PasswordBearer
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
+from starlette.middleware.base import BaseHTTPMiddleware
 from sqlalchemy.orm import Session
 import aiofiles
 
@@ -75,9 +76,16 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 # CORS middleware - Must be added before other middleware
+# Build CORS origins list including Vercel preview URLs
+cors_origins = settings.cors_origins_list.copy()
+# Add regex pattern for Vercel preview deployments (any subdomain of vercel.app)
+# FastAPI CORSMiddleware supports allow_origin_regex for pattern matching
+vercel_pattern = r"https://.*\.vercel\.app"
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+    allow_origins=cors_origins,  # Exact matches
+    allow_origin_regex=vercel_pattern,  # Pattern for Vercel preview URLs
     allow_credentials=True,
     allow_methods=["*"],  # Allow all methods including OPTIONS
     allow_headers=["*"],  # Allow all headers for preflight
@@ -85,11 +93,27 @@ app.add_middleware(
     max_age=3600,  # Cache preflight for 1 hour
 )
 
+# Security headers middleware
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Add security headers to all responses."""
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        if settings.ENABLE_SECURITY_HEADERS:
+            response.headers["X-Content-Type-Options"] = "nosniff"
+            response.headers["X-Frame-Options"] = "DENY"
+            response.headers["X-XSS-Protection"] = "1; mode=block"
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+            response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+            if settings.is_production:
+                response.headers["Content-Security-Policy"] = "default-src 'self'"
+        return response
+
+app.add_middleware(SecurityHeadersMiddleware)
+
 # Trusted host middleware for production security
 if settings.is_production:
     trusted_hosts = os.getenv("TRUSTED_HOSTS", "").split(",")
     if trusted_hosts and trusted_hosts[0]:
-        from fastapi.middleware.trustedhost import TrustedHostMiddleware
         app.add_middleware(
             TrustedHostMiddleware,
             allowed_hosts=trusted_hosts
@@ -102,13 +126,6 @@ async def startup_event():
     try:
         init_db()
         logger.info("✅ Database connection successful!")
-        logger.info(f"🚀 SmartPath API v{settings.APP_VERSION} started")
-        logger.info(f"📍 Environment: {settings.ENVIRONMENT}")
-        logger.info(f"🔧 Debug mode: {settings.DEBUG}")
-        
-        # Create uploads directory if it doesn't exist (for local development)
-        os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-        logger.info(f"📁 Upload directory: {settings.UPLOAD_DIR}")
         logger.info(f"🚀 SmartPath API v{settings.APP_VERSION} started")
         logger.info(f"📍 Environment: {settings.ENVIRONMENT}")
         logger.info(f"🔧 Debug mode: {settings.DEBUG}")

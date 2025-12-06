@@ -4,8 +4,9 @@ Handles environment variables and application settings.
 """
 import os
 import warnings
-from typing import Optional
+from typing import Optional, List
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import field_validator
 from functools import lru_cache
 
 
@@ -22,10 +23,9 @@ class Settings(BaseSettings):
     
     # Server
     HOST: str = os.getenv("HOST", "0.0.0.0")
-    PORT: int = int(os.getenv("PORT", "8000"))  # Heroku sets PORT dynamically
+    PORT: int = int(os.getenv("PORT", "8000"))  # Render sets PORT dynamically
     
-    # Database (Local PostgreSQL by default, Supabase optional)
-    # Heroku Postgres automatically sets DATABASE_URL
+    # Database (PostgreSQL - Render Postgres or local)
     DATABASE_URL: str = os.getenv(
         "DATABASE_URL",
         "postgresql://postgres:root@localhost:5432/smartpath"
@@ -34,10 +34,10 @@ class Settings(BaseSettings):
     DB_POOL_SIZE: int = int(os.getenv("DB_POOL_SIZE", "10"))
     DB_MAX_OVERFLOW: int = int(os.getenv("DB_MAX_OVERFLOW", "20"))
     
-    # Heroku Postgres fix: postgresql:// -> postgresql://
+    # Database URL normalization - handles postgres:// -> postgresql:// conversion
     @property
     def database_url_fixed(self) -> str:
-        """Fix Heroku DATABASE_URL which uses postgres:// instead of postgresql://"""
+        """Normalize DATABASE_URL to use postgresql:// protocol."""
         url = self.DATABASE_URL
         if url and url.startswith("postgres://"):
             url = url.replace("postgres://", "postgresql://", 1)
@@ -82,24 +82,49 @@ class Settings(BaseSettings):
     
     # CORS - Production should restrict origins
     # In production, set CORS_ORIGINS env var with comma-separated list
-    CORS_ORIGINS: list = [
-        "http://localhost:3000",
-        "http://localhost:5173",
-        "http://localhost:4173",  # Vite preview
-        "http://localhost:8080",  # Vite dev server alternative port
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:4173",
-        "http://127.0.0.1:8080",  # Vite dev server alternative port
-    ] + ([origin.strip() for origin in os.getenv("CORS_ORIGINS", "").split(",") if origin.strip()] if os.getenv("CORS_ORIGINS") else [])
+    # Render frontend URLs should be added via environment variable
+    # Store as string to avoid JSON parsing issues, parse in property
+    CORS_ORIGINS: str = ""
+    
+    @property
+    def cors_origins_list(self) -> List[str]:
+        """Get CORS origins as a list, parsing from comma-separated string."""
+        default_origins = [
+            "http://localhost:3000",
+            "http://localhost:5173",
+            "http://localhost:4173",  # Vite preview
+            "http://localhost:8080",  # Vite dev server alternative port
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:5173",
+            "http://127.0.0.1:4173",
+            "http://127.0.0.1:8080",  # Vite dev server alternative port
+        ]
+        
+        if not self.CORS_ORIGINS or self.CORS_ORIGINS.strip() == "":
+            return default_origins
+        
+        # Split by comma and add to defaults
+        additional_origins = [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
+        return default_origins + additional_origins
     
     # Environment
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")  # development, staging, production
     
+    # Security headers
+    ENABLE_SECURITY_HEADERS: bool = True
+    ALLOWED_HOSTS: str = ""
+    
+    @property
+    def allowed_hosts_list(self) -> List[str]:
+        """Get allowed hosts as a list, parsing from comma-separated string."""
+        if not self.ALLOWED_HOSTS or self.ALLOWED_HOSTS.strip() == "":
+            return []
+        return [host.strip() for host in self.ALLOWED_HOSTS.split(",") if host.strip()]
+    
     @property
     def is_production(self) -> bool:
         """Check if running in production."""
-        return self.ENVIRONMENT.lower() == "production" or not self.DEBUG
+        return self.ENVIRONMENT.lower() == "production" or os.getenv("RENDER") == "true"
     
     # Kenyan Context
     DEFAULT_CURRICULUM: str = "CBC"  # CBC or 8-4-4
