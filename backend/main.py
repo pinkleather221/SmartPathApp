@@ -76,9 +76,16 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 # CORS middleware - Must be added before other middleware
+# Build CORS origins list including Vercel preview URLs
+cors_origins = settings.cors_origins_list.copy()
+# Add regex pattern for Vercel preview deployments (any subdomain of vercel.app)
+# FastAPI CORSMiddleware supports allow_origin_regex for pattern matching
+vercel_pattern = r"https://.*\.vercel\.app"
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins_list,
+    allow_origins=cors_origins,  # Exact matches
+    allow_origin_regex=vercel_pattern,  # Pattern for Vercel preview URLs
     allow_credentials=True,
     allow_methods=["*"],  # Allow all methods including OPTIONS
     allow_headers=["*"],  # Allow all headers for preflight
