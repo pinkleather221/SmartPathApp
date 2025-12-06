@@ -2,6 +2,8 @@
 Pydantic models for request/response validation.
 These models define the API contract for SmartPath.
 """
+from __future__ import annotations
+
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, EmailStr, Field, validator
@@ -304,7 +306,7 @@ class StudyPlanResponse(BaseModel):
     strategy: Optional[str] = Field(None, alias="study_strategy")
     # Expose as 'weekly_schedule' to clients, map from DB field 'weekly_schedule_json'
     weekly_schedule: Optional[List[Dict[str, Any]]] = Field(None, alias="weekly_schedule_json")
-    sessions: Optional[List[StudySessionResponse]] = None
+    sessions: Optional[List["StudySessionResponse"]] = None
     created_at: datetime
     
     model_config = {"from_attributes": True, "populate_by_name": True}
