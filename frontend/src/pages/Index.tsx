@@ -151,7 +151,9 @@ const Index = () => {
               <span className="text-lg font-bold text-foreground">SmartPath</span>
             </div>
             <p className="text-sm text-muted-foreground">
-              © 2024 SmartPath. Empowering Kenyan students to excel.
+            {
+                new Date().getFullYear() === 2025 ? `© ${new Date().getFullYear()} SmartPath. Empowering Kenyan students to excel.` : `© ${new Date().getFullYear()} SmartPath. Empowering Kenyan students to excel.`
+              }
             </p>
           </div>
         </div>
