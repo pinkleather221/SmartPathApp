@@ -768,19 +768,73 @@ class InsightService:
         )
         
         # Save as insight
+        import logging
+        logger = logging.getLogger(__name__)
+        
         try:
-            insight = LearningInsight(
+            # Create feedback insight
+            feedback_insight = LearningInsight(
                 user_id=user_id,
                 insight_type=InsightType.FEEDBACK,
                 title="Academic Feedback",
                 content=feedback.get("motivational_message", "Academic feedback generated."),
                 metadata_json=feedback
             )
-            db.add(insight)
+            db.add(feedback_insight)
+            
+            # Create additional insights from recommendations
+            if feedback.get("recommendations"):
+                for i, rec in enumerate(feedback.get("recommendations", [])[:5]):  # Limit to 5
+                    rec_insight = LearningInsight(
+                        user_id=user_id,
+                        insight_type=InsightType.RECOMMENDATION,
+                        title=f"Study Recommendation {i+1}",
+                        content=rec,
+                        metadata_json={"source": "academic_feedback", "related_feedback": feedback_insight.insight_id}
+                    )
+                    db.add(rec_insight)
+            
+            # Create insights from strengths
+            if feedback.get("strengths"):
+                strengths_text = "Your academic strengths:\n" + "\n".join(f"• {s}" for s in feedback.get("strengths", []))
+                strength_insight = LearningInsight(
+                    user_id=user_id,
+                    insight_type=InsightType.ANALYSIS,
+                    title="Academic Strengths",
+                    content=strengths_text,
+                    metadata_json={"source": "academic_feedback", "type": "strengths"}
+                )
+                db.add(strength_insight)
+            
+            # Create insights from weaknesses
+            if feedback.get("weaknesses"):
+                weaknesses_text = "Areas for improvement:\n" + "\n".join(f"• {w}" for w in feedback.get("weaknesses", []))
+                weakness_insight = LearningInsight(
+                    user_id=user_id,
+                    insight_type=InsightType.ANALYSIS,
+                    title="Areas for Improvement",
+                    content=weaknesses_text,
+                    metadata_json={"source": "academic_feedback", "type": "weaknesses"}
+                )
+                db.add(weakness_insight)
+            
+            # Create tips insight from next steps
+            if feedback.get("next_steps"):
+                tips_text = "Recommended next steps:\n" + "\n".join(f"• {step}" for step in feedback.get("next_steps", []))
+                tips_insight = LearningInsight(
+                    user_id=user_id,
+                    insight_type=InsightType.TIP,
+                    title="Learning Tips",
+                    content=tips_text,
+                    metadata_json={"source": "academic_feedback", "type": "next_steps"}
+                )
+                db.add(tips_insight)
+            
             db.commit()
+            logger.info(f"Successfully created insights for user {user_id}")
         except Exception as e:
             # Log error but don't fail the request
-            print(f"Warning: Could not save insight: {e}")
+            logger.warning(f"Could not save insights: {e}", exc_info=True)
             db.rollback()
         
         return AcademicFeedback(**feedback)

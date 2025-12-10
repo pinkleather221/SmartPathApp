@@ -461,13 +461,8 @@ export const insightsApi = {
   getLearningTips: (limit?: number) =>
     apiClient.get("/insights/learning-tips", limit ? { limit } : undefined),
   getAcademicAnalysis: () => apiClient.get("/insights/academic-analysis"),
-  getById: (insightId: number) => {
-    // Get insights and filter by ID
-    return apiClient.get("/insights/academic-analysis").then((insights: unknown[]) => {
-      const insightsArray = insights as Array<{ insight_id: number }>;
-      return insightsArray.find((i) => i.insight_id === insightId);
-    });
-  },
+  getById: (insightId: number) => apiClient.get(`/insights/${insightId}`),
+  markAsRead: (insightId: number) => apiClient.put(`/insights/${insightId}/read`),
 };
 
 export default apiClient;
