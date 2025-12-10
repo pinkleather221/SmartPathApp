@@ -386,6 +386,14 @@ async def upload_report(
             file_type=file.content_type
         )
         
+        # Auto-generate insights after report upload
+        try:
+            logger.info(f"Auto-generating insights for user {current_user.user_id} after report upload")
+            await InsightService.generate_feedback(db, current_user.user_id)
+        except Exception as e:
+            logger.warning(f"Could not auto-generate insights after report upload: {e}")
+            # Don't fail the report upload if insight generation fails
+        
         return ReportResponse.model_validate(report)
         
     except Exception as e:
@@ -421,6 +429,14 @@ async def upload_report_json(
         year=report_data.year,
         grades_json=report_data.grades_json
     )
+    
+    # Auto-generate insights after report upload
+    try:
+        logger.info(f"Auto-generating insights for user {current_user.user_id} after report upload")
+        await InsightService.generate_feedback(db, current_user.user_id)
+    except Exception as e:
+        logger.warning(f"Could not auto-generate insights after report upload: {e}")
+        # Don't fail the report upload if insight generation fails
     
     return ReportResponse.model_validate(report)
 
@@ -894,19 +910,87 @@ async def get_learning_tips(
 
 @app.get(f"{settings.API_V1_PREFIX}/insights/academic-analysis", response_model=List[LearningInsightResponse])
 async def get_academic_analysis(
-    limit: int = 10,
+    limit: int = 50,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
-    """Get academic analysis insights."""
-    from database import LearningInsight, InsightType
+    """Get all learning insights for the user."""
+    from database import LearningInsight
     
+    # Get all insights, not just ANALYSIS type
     insights = db.query(LearningInsight).filter(
-        LearningInsight.user_id == current_user.user_id,
-        LearningInsight.insight_type == InsightType.ANALYSIS
+        LearningInsight.user_id == current_user.user_id
     ).order_by(LearningInsight.generated_at.desc()).limit(limit).all()
     
+    # If no insights exist, try to generate some
+    if not insights:
+        logger.info(f"No insights found for user {current_user.user_id}, attempting to generate feedback")
+        try:
+            # Generate feedback which will create an insight
+            await InsightService.generate_feedback(db, current_user.user_id)
+            # Fetch again
+            insights = db.query(LearningInsight).filter(
+                LearningInsight.user_id == current_user.user_id
+            ).order_by(LearningInsight.generated_at.desc()).limit(limit).all()
+        except Exception as e:
+            logger.warning(f"Could not generate insights: {e}")
+    
     return [LearningInsightResponse.model_validate(insight) for insight in insights]
+
+
+@app.get(f"{settings.API_V1_PREFIX}/insights/{{insight_id}}", response_model=LearningInsightResponse)
+async def get_insight_by_id(
+    insight_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Get a specific insight by ID."""
+    from database import LearningInsight
+    
+    insight = db.query(LearningInsight).filter(
+        LearningInsight.insight_id == insight_id,
+        LearningInsight.user_id == current_user.user_id
+    ).first()
+    
+    if not insight:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Insight not found"
+        )
+    
+    # Mark as read when viewed
+    if not insight.is_read:
+        insight.is_read = True
+        db.commit()
+        db.refresh(insight)
+    
+    return LearningInsightResponse.model_validate(insight)
+
+
+@app.put(f"{settings.API_V1_PREFIX}/insights/{{insight_id}}/read", response_model=MessageResponse)
+async def mark_insight_read(
+    insight_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Mark an insight as read."""
+    from database import LearningInsight
+    
+    insight = db.query(LearningInsight).filter(
+        LearningInsight.insight_id == insight_id,
+        LearningInsight.user_id == current_user.user_id
+    ).first()
+    
+    if not insight:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Insight not found"
+        )
+    
+    insight.is_read = True
+    db.commit()
+    
+    return MessageResponse(message="Insight marked as read")
 
 
 # ==================== HEALTH CHECK ====================

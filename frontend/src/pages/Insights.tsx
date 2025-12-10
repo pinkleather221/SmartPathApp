@@ -23,7 +23,22 @@ const Insights = () => {
     try {
       setLoading(true);
       const data = await insightsApi.getAcademicAnalysis();
-      setInsights(data || []);
+      // Ensure data is an array
+      const insightsArray = Array.isArray(data) ? data : [];
+      setInsights(insightsArray);
+      
+      // If no insights, try to generate feedback
+      if (insightsArray.length === 0) {
+        try {
+          await insightsApi.getFeedback(); // This will generate insights
+          // Reload insights after generation
+          const newData = await insightsApi.getAcademicAnalysis();
+          setInsights(Array.isArray(newData) ? newData : []);
+        } catch (genError) {
+          // Silently fail - insights will be generated when reports are uploaded
+          console.log("No insights available yet. Upload a report to generate insights.");
+        }
+      }
     } catch (error) {
       toast({
         title: "Error loading insights",
