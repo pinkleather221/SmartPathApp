@@ -37,7 +37,9 @@ from models import (
     CareerRecommendationResponse, CareerQuizRequest,
     StudyPlanGenerate, StudyPlanUpdate, StudyPlanResponse, StudySessionLog, StudySessionResponse,
     LearningInsightResponse, AcademicFeedback,
-    MessageResponse, ErrorResponse, PaginatedResponse
+    MessageResponse, ErrorResponse, PaginatedResponse,
+    InviteCodeResponse, InviteCodeRedeem, LinkedStudentResponse, LinkedGuardianResponse,
+    StudentDashboardResponse, GuardianInsightCreate
 )
 from pydantic import BaseModel
 
@@ -47,7 +49,8 @@ from auth import (
 )
 from services import (
     ReportService, PerformanceService, FlashcardService,
-    CareerService, StudyPlanService, InsightService
+    CareerService, StudyPlanService, InsightService,
+    InviteService, RelationshipService
 )
 from utils import extract_grades_from_text, normalize_subject_name, extract_grades_from_file
 
@@ -991,6 +994,253 @@ async def mark_insight_read(
     db.commit()
     
     return MessageResponse(message="Insight marked as read")
+
+
+# ==================== INVITE CODE ROUTES ====================
+
+@app.post(f"{settings.API_V1_PREFIX}/invite/generate", response_model=InviteCodeResponse, status_code=status.HTTP_201_CREATED)
+async def generate_invite_code(
+    current_user: User = Depends(require_user_type("teacher", "parent")),
+    db: Session = Depends(get_db)
+):
+    """Generate an invite code for linking students. Only for teachers and parents."""
+    try:
+        invite = InviteService.create_invite_code(
+            db=db,
+            creator_id=current_user.user_id,
+            creator_type=current_user.user_type
+        )
+        return InviteCodeResponse.model_validate(invite)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+
+
+@app.get(f"{settings.API_V1_PREFIX}/invite/my-codes", response_model=List[InviteCodeResponse])
+async def get_my_invite_codes(
+    current_user: User = Depends(require_user_type("teacher", "parent")),
+    db: Session = Depends(get_db)
+):
+    """Get all invite codes created by the current user."""
+    codes = InviteService.get_my_codes(db, current_user.user_id)
+    return [InviteCodeResponse.model_validate(c) for c in codes]
+
+
+@app.post(f"{settings.API_V1_PREFIX}/invite/redeem", response_model=MessageResponse)
+async def redeem_invite_code(
+    request: InviteCodeRedeem,
+    current_user: User = Depends(require_user_type("student")),
+    db: Session = Depends(get_db)
+):
+    """Redeem an invite code to link with a teacher or parent. Only for students."""
+    try:
+        relationship = InviteService.redeem_code(
+            db=db,
+            code=request.code,
+            student_id=current_user.user_id
+        )
+        return MessageResponse(
+            message=f"Successfully linked! You are now connected.",
+            success=True,
+            data={"relationship_id": relationship.relationship_id}
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+
+
+# ==================== RELATIONSHIP ROUTES ====================
+
+@app.get(f"{settings.API_V1_PREFIX}/relationships/students", response_model=List[LinkedStudentResponse])
+async def get_linked_students(
+    current_user: User = Depends(require_user_type("teacher", "parent")),
+    db: Session = Depends(get_db)
+):
+    """Get all students linked to the current teacher/parent."""
+    students = RelationshipService.get_linked_students(db, current_user.user_id)
+    return students
+
+
+@app.get(f"{settings.API_V1_PREFIX}/relationships/guardians", response_model=List[LinkedGuardianResponse])
+async def get_linked_guardians(
+    current_user: User = Depends(require_user_type("student")),
+    db: Session = Depends(get_db)
+):
+    """Get all teachers/parents linked to the current student."""
+    guardians = RelationshipService.get_linked_guardians(db, current_user.user_id)
+    return guardians
+
+
+@app.get(f"{settings.API_V1_PREFIX}/students/{{student_id}}/dashboard", response_model=StudentDashboardResponse)
+async def get_student_dashboard(
+    student_id: int,
+    current_user: User = Depends(require_user_type("teacher", "parent")),
+    db: Session = Depends(get_db)
+):
+    """Get a student's dashboard data. Only accessible by linked teachers/parents."""
+    try:
+        dashboard = RelationshipService.get_student_dashboard(
+            db=db,
+            guardian_id=current_user.user_id,
+            student_id=student_id
+        )
+        return dashboard
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(e)
+        )
+
+
+@app.get(f"{settings.API_V1_PREFIX}/students/{{student_id}}/reports", response_model=List[ReportResponse])
+async def get_student_reports(
+    student_id: int,
+    limit: int = 10,
+    current_user: User = Depends(require_user_type("teacher", "parent")),
+    db: Session = Depends(get_db)
+):
+    """Get a student's reports. Only accessible by linked teachers/parents."""
+    # Verify relationship
+    if not RelationshipService.verify_relationship(db, current_user.user_id, student_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to view this student's reports"
+        )
+    
+    reports = ReportService.get_report_history(db, student_id, limit)
+    return [ReportResponse.model_validate(r) for r in reports]
+
+
+@app.delete(f"{settings.API_V1_PREFIX}/relationships/{{student_id}}", response_model=MessageResponse)
+async def remove_student_link(
+    student_id: int,
+    current_user: User = Depends(require_user_type("teacher", "parent")),
+    db: Session = Depends(get_db)
+):
+    """Remove a link to a student."""
+    success = RelationshipService.remove_relationship(db, current_user.user_id, student_id)
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Relationship not found"
+        )
+    return MessageResponse(message="Student link removed successfully")
+
+
+@app.get(f"{settings.API_V1_PREFIX}/students/{{student_id}}/flashcards", response_model=List[FlashcardResponse])
+async def get_student_flashcards(
+    student_id: int,
+    subject: Optional[str] = None,
+    limit: int = 50,
+    current_user: User = Depends(require_user_type("teacher", "parent")),
+    db: Session = Depends(get_db)
+):
+    """Get a student's flashcards. Only accessible by linked teachers/parents."""
+    from database import Flashcard
+    
+    # Verify relationship
+    if not RelationshipService.verify_relationship(db, current_user.user_id, student_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to view this student's flashcards"
+        )
+    
+    query = db.query(Flashcard).filter(Flashcard.user_id == student_id)
+    
+    if subject:
+        query = query.filter(Flashcard.subject == subject)
+    
+    flashcards = query.order_by(Flashcard.created_at.desc()).limit(limit).all()
+    return [FlashcardResponse.model_validate(card) for card in flashcards]
+
+
+@app.get(f"{settings.API_V1_PREFIX}/students/{{student_id}}/career", response_model=List[CareerRecommendationResponse])
+async def get_student_career_recommendations(
+    student_id: int,
+    current_user: User = Depends(require_user_type("teacher", "parent")),
+    db: Session = Depends(get_db)
+):
+    """Get a student's career recommendations. Only accessible by linked teachers/parents."""
+    from database import CareerRecommendation
+    
+    # Verify relationship
+    if not RelationshipService.verify_relationship(db, current_user.user_id, student_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to view this student's career recommendations"
+        )
+    
+    recommendations = db.query(CareerRecommendation).filter(
+        CareerRecommendation.user_id == student_id
+    ).order_by(CareerRecommendation.match_score.desc()).all()
+    
+    return [CareerRecommendationResponse.model_validate(r) for r in recommendations]
+
+
+@app.post(f"{settings.API_V1_PREFIX}/students/{{student_id}}/insights", response_model=LearningInsightResponse, status_code=status.HTTP_201_CREATED)
+async def create_student_insight(
+    student_id: int,
+    insight_data: GuardianInsightCreate,
+    current_user: User = Depends(require_user_type("teacher", "parent")),
+    db: Session = Depends(get_db)
+):
+    """Create an insight for a student. Only accessible by linked teachers/parents."""
+    from database import LearningInsight
+    
+    # Verify relationship
+    if not RelationshipService.verify_relationship(db, current_user.user_id, student_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to create insights for this student"
+        )
+    
+    # Create the insight
+    insight = LearningInsight(
+        user_id=student_id,
+        insight_type=insight_data.insight_type,
+        title=insight_data.title,
+        content=insight_data.content,
+        created_by=current_user.user_id,
+        metadata_json={
+            "created_by_name": current_user.full_name,
+            "created_by_type": current_user.user_type.value,
+            "source": "guardian"
+        }
+    )
+    
+    db.add(insight)
+    db.commit()
+    db.refresh(insight)
+    
+    return LearningInsightResponse.model_validate(insight)
+
+
+@app.get(f"{settings.API_V1_PREFIX}/students/{{student_id}}/insights", response_model=List[LearningInsightResponse])
+async def get_student_insights(
+    student_id: int,
+    limit: int = 50,
+    current_user: User = Depends(require_user_type("teacher", "parent")),
+    db: Session = Depends(get_db)
+):
+    """Get insights for a student. Only accessible by linked teachers/parents."""
+    from database import LearningInsight
+    
+    # Verify relationship
+    if not RelationshipService.verify_relationship(db, current_user.user_id, student_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to view this student's insights"
+        )
+    
+    insights = db.query(LearningInsight).filter(
+        LearningInsight.user_id == student_id
+    ).order_by(LearningInsight.generated_at.desc()).limit(limit).all()
+    
+    return [LearningInsightResponse.model_validate(insight) for insight in insights]
 
 
 # ==================== HEALTH CHECK ====================

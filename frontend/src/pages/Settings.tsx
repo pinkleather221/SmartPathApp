@@ -9,9 +9,291 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { User, Bell, Lock, Trash2, Loader2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { User, Bell, Lock, Trash2, Loader2, Link, Copy, Check, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { authApi } from "@/lib/api";
+import { authApi, inviteApi, relationshipsApi, InviteCode, LinkedStudent, LinkedGuardian } from "@/lib/api";
+
+// Connections Section Component
+const ConnectionsSection = ({ userType }: { userType?: string }) => {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [inviteCode, setInviteCode] = useState("");
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
+
+  // For teachers/parents: fetch their invite codes and linked students
+  const { data: myCodes, isLoading: loadingCodes } = useQuery({
+    queryKey: ["myCodes"],
+    queryFn: inviteApi.getMyCodes,
+    enabled: userType === "teacher" || userType === "parent",
+  });
+
+  const { data: linkedStudents, isLoading: loadingStudents } = useQuery({
+    queryKey: ["linkedStudents"],
+    queryFn: relationshipsApi.getLinkedStudents,
+    enabled: userType === "teacher" || userType === "parent",
+  });
+
+  // For students: fetch linked guardians
+  const { data: linkedGuardians, isLoading: loadingGuardians } = useQuery({
+    queryKey: ["linkedGuardians"],
+    queryFn: relationshipsApi.getLinkedGuardians,
+    enabled: userType === "student",
+  });
+
+  // Generate invite code mutation
+  const generateCodeMutation = useMutation({
+    mutationFn: inviteApi.generateCode,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["myCodes"] });
+      toast({
+        title: "Invite Code Generated",
+        description: "Share this code with your student to link accounts.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to generate invite code.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Redeem code mutation
+  const redeemCodeMutation = useMutation({
+    mutationFn: inviteApi.redeemCode,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["linkedGuardians"] });
+      setInviteCode("");
+      toast({
+        title: "Successfully Linked!",
+        description: "You are now connected to your teacher/parent.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to redeem invite code.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const copyToClipboard = (code: string) => {
+    navigator.clipboard.writeText(code);
+    setCopiedCode(code);
+    setTimeout(() => setCopiedCode(null), 2000);
+    toast({
+      title: "Copied!",
+      description: "Invite code copied to clipboard.",
+    });
+  };
+
+  // Teacher/Parent view
+  if (userType === "teacher" || userType === "parent") {
+    return (
+      <>
+        {/* Generate Invite Code */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Invite Code</CardTitle>
+            <CardDescription>
+              Generate an invite code to share with your {userType === "teacher" ? "students" : "child"}. 
+              They can enter this code to link their account to yours.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Button 
+              onClick={() => generateCodeMutation.mutate()}
+              disabled={generateCodeMutation.isPending}
+            >
+              {generateCodeMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                "Generate New Code"
+              )}
+            </Button>
+
+            {/* Active Codes */}
+            {loadingCodes ? (
+              <p className="text-muted-foreground">Loading codes...</p>
+            ) : myCodes && myCodes.length > 0 ? (
+              <div className="space-y-3 mt-4">
+                <h4 className="font-medium text-sm text-muted-foreground">Your Invite Codes</h4>
+                {myCodes.map((code: InviteCode) => (
+                  <div 
+                    key={code.code_id}
+                    className="flex items-center justify-between p-3 rounded-lg border"
+                  >
+                    <div className="flex items-center gap-3">
+                      <code className="text-lg font-mono font-bold tracking-wider">
+                        {code.code}
+                      </code>
+                      {code.used ? (
+                        <Badge variant="secondary">Used</Badge>
+                      ) : new Date(code.expires_at) < new Date() ? (
+                        <Badge variant="destructive">Expired</Badge>
+                      ) : (
+                        <Badge variant="default">Active</Badge>
+                      )}
+                    </div>
+                    {!code.used && new Date(code.expires_at) > new Date() && (
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => copyToClipboard(code.code)}
+                      >
+                        {copiedCode === code.code ? (
+                          <Check className="w-4 h-4" />
+                        ) : (
+                          <Copy className="w-4 h-4" />
+                        )}
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-muted-foreground text-sm">
+                No invite codes yet. Generate one to get started.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Linked Students */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="w-5 h-5" />
+              Linked {userType === "teacher" ? "Students" : "Children"}
+            </CardTitle>
+            <CardDescription>
+              {userType === "teacher" ? "Students" : "Children"} connected to your account
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loadingStudents ? (
+              <p className="text-muted-foreground">Loading...</p>
+            ) : linkedStudents && linkedStudents.length > 0 ? (
+              <div className="space-y-3">
+                {linkedStudents.map((student: LinkedStudent) => (
+                  <div 
+                    key={student.user_id}
+                    className="flex items-center justify-between p-3 rounded-lg border"
+                  >
+                    <div>
+                      <p className="font-medium">{student.full_name}</p>
+                      <p className="text-sm text-muted-foreground">{student.email}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {student.grade_level && (
+                        <Badge variant="outline">Grade {student.grade_level}</Badge>
+                      )}
+                      <Badge variant="secondary">
+                        Linked {new Date(student.linked_at).toLocaleDateString()}
+                      </Badge>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-muted-foreground text-center py-8">
+                No {userType === "teacher" ? "students" : "children"} linked yet. 
+                Share your invite code to get started.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </>
+    );
+  }
+
+  // Student view
+  return (
+    <>
+      {/* Redeem Invite Code */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Enter Invite Code</CardTitle>
+          <CardDescription>
+            Enter an invite code from your teacher or parent to link your accounts. 
+            This allows them to view your academic progress.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex gap-3">
+            <Input
+              placeholder="Enter 8-character code"
+              value={inviteCode}
+              onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
+              maxLength={8}
+              className="font-mono text-lg tracking-wider"
+            />
+            <Button 
+              onClick={() => redeemCodeMutation.mutate(inviteCode)}
+              disabled={inviteCode.length !== 8 || redeemCodeMutation.isPending}
+            >
+              {redeemCodeMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Linking...
+                </>
+              ) : (
+                "Link Account"
+              )}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Linked Guardians */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Users className="w-5 h-5" />
+            Linked Teachers & Parents
+          </CardTitle>
+          <CardDescription>
+            Teachers and parents who can view your progress
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loadingGuardians ? (
+            <p className="text-muted-foreground">Loading...</p>
+          ) : linkedGuardians && linkedGuardians.length > 0 ? (
+            <div className="space-y-3">
+              {linkedGuardians.map((guardian: LinkedGuardian) => (
+                <div 
+                  key={guardian.user_id}
+                  className="flex items-center justify-between p-3 rounded-lg border"
+                >
+                  <div>
+                    <p className="font-medium">{guardian.full_name}</p>
+                    <p className="text-sm text-muted-foreground">{guardian.email}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={guardian.user_type === "teacher" ? "default" : "secondary"}>
+                      {guardian.user_type === "teacher" ? "Teacher" : "Parent"}
+                    </Badge>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-muted-foreground text-center py-8">
+              No teachers or parents linked yet. Enter an invite code to link your account.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+    </>
+  );
+};
 
 const Settings = () => {
   const { toast } = useToast();
@@ -107,10 +389,14 @@ const Settings = () => {
         </div>
 
         <Tabs defaultValue="profile" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="profile">
               <User className="w-4 h-4 mr-2" />
               Profile
+            </TabsTrigger>
+            <TabsTrigger value="connections">
+              <Link className="w-4 h-4 mr-2" />
+              Connections
             </TabsTrigger>
             <TabsTrigger value="notifications">
               <Bell className="w-4 h-4 mr-2" />
@@ -218,6 +504,11 @@ const Settings = () => {
                 </Button>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Connections Tab */}
+          <TabsContent value="connections" className="space-y-6">
+            <ConnectionsSection userType={user?.user_type} />
           </TabsContent>
 
           {/* Notifications Tab */}

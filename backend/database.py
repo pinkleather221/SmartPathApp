@@ -112,7 +112,7 @@ class User(Base):
     flashcards = relationship("Flashcard", back_populates="user", cascade="all, delete-orphan")
     career_recommendations = relationship("CareerRecommendation", back_populates="user", cascade="all, delete-orphan")
     study_plans = relationship("StudyPlan", back_populates="user", cascade="all, delete-orphan")
-    insights = relationship("LearningInsight", back_populates="user", cascade="all, delete-orphan")
+    insights = relationship("LearningInsight", back_populates="user", foreign_keys="LearningInsight.user_id", cascade="all, delete-orphan")
 
 
 class AcademicReport(Base):
@@ -264,9 +264,45 @@ class LearningInsight(Base):
     metadata_json = Column("metadata", JSON, nullable=True)  # Additional structured data
     generated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     is_read = Column(Boolean, default=False)
+    # Track who created the insight (null for AI-generated, user_id for guardian-created)
+    created_by = Column(Integer, ForeignKey("users.user_id"), nullable=True)
     
     # Relationships
-    user = relationship("User", back_populates="insights")
+    user = relationship("User", foreign_keys=[user_id], back_populates="insights")
+    creator = relationship("User", foreign_keys=[created_by])
+
+
+class InviteCode(Base):
+    """Invite code for linking teachers/parents to students."""
+    __tablename__ = "invite_codes"
+    
+    code_id = Column(Integer, primary_key=True, index=True)
+    code = Column(String(8), unique=True, nullable=False, index=True)
+    creator_id = Column(Integer, ForeignKey("users.user_id"), nullable=False)
+    creator_type = Column(SQLEnum(UserType), nullable=False)  # teacher or parent
+    used = Column(Boolean, default=False, nullable=False)
+    used_by = Column(Integer, ForeignKey("users.user_id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    
+    # Relationships
+    creator = relationship("User", foreign_keys=[creator_id], backref="created_invite_codes")
+    redeemer = relationship("User", foreign_keys=[used_by], backref="redeemed_invite_codes")
+
+
+class UserRelationship(Base):
+    """Relationship between guardians (teachers/parents) and students."""
+    __tablename__ = "user_relationships"
+    
+    relationship_id = Column(Integer, primary_key=True, index=True)
+    guardian_id = Column(Integer, ForeignKey("users.user_id"), nullable=False, index=True)
+    student_id = Column(Integer, ForeignKey("users.user_id"), nullable=False, index=True)
+    relationship_type = Column(String(20), nullable=False)  # "teacher-student" or "parent-child"
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    
+    # Relationships
+    guardian = relationship("User", foreign_keys=[guardian_id], backref="students")
+    student = relationship("User", foreign_keys=[student_id], backref="guardians")
 
 
 # Database dependency for FastAPI

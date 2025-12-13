@@ -10,13 +10,17 @@ from sqlalchemy import desc, func
 from database import (
     User, AcademicReport, SubjectPerformance, Flashcard, FlashcardReview,
     CareerRecommendation, StudyPlan, StudySession, LearningInsight,
-    DifficultyLevel, PlanStatus, InsightType
+    DifficultyLevel, PlanStatus, InsightType, InviteCode, UserRelationship, UserType
 )
 from models import (
     ReportAnalysis, SubjectPerformanceResponse, PerformanceDashboard,
     GradeTrend, PerformancePrediction, FlashcardResponse, CareerRecommendationResponse,
-    StudyPlanResponse, StudySessionResponse, LearningInsightResponse, AcademicFeedback
+    StudyPlanResponse, StudySessionResponse, LearningInsightResponse, AcademicFeedback,
+    InviteCodeResponse, LinkedStudentResponse, LinkedGuardianResponse, StudentDashboardResponse,
+    ReportResponse
 )
+import secrets
+import string
 from utils import (
     grade_to_numeric, grade_to_gpa, calculate_gpa, analyze_grade_trend,
     predict_next_grade, identify_strong_subjects, identify_weak_subjects,
@@ -838,6 +842,234 @@ class InsightService:
             db.rollback()
         
         return AcademicFeedback(**feedback)
+
+
+# ==================== INVITE SERVICES ====================
+
+class InviteService:
+    """Service for invite code management."""
+    
+    @staticmethod
+    def generate_code() -> str:
+        """Generate a random 8-character invite code."""
+        alphabet = string.ascii_uppercase + string.digits
+        return ''.join(secrets.choice(alphabet) for _ in range(8))
+    
+    @staticmethod
+    def create_invite_code(db: Session, creator_id: int, creator_type: UserType) -> InviteCode:
+        """Create a new invite code for a teacher or parent."""
+        # Validate creator type
+        if creator_type not in [UserType.TEACHER, UserType.PARENT]:
+            raise ValueError("Only teachers and parents can create invite codes")
+        
+        # Generate unique code
+        code = InviteService.generate_code()
+        while db.query(InviteCode).filter(InviteCode.code == code).first():
+            code = InviteService.generate_code()
+        
+        # Create invite code (expires in 7 days)
+        invite = InviteCode(
+            code=code,
+            creator_id=creator_id,
+            creator_type=creator_type,
+            expires_at=datetime.utcnow() + timedelta(days=7)
+        )
+        
+        db.add(invite)
+        db.commit()
+        db.refresh(invite)
+        
+        return invite
+    
+    @staticmethod
+    def get_my_codes(db: Session, user_id: int) -> List[InviteCode]:
+        """Get all invite codes created by a user."""
+        return db.query(InviteCode).filter(
+            InviteCode.creator_id == user_id
+        ).order_by(InviteCode.created_at.desc()).all()
+    
+    @staticmethod
+    def redeem_code(db: Session, code: str, student_id: int) -> UserRelationship:
+        """Redeem an invite code and create a relationship."""
+        # Find the invite code
+        invite = db.query(InviteCode).filter(
+            InviteCode.code == code.upper()
+        ).first()
+        
+        if not invite:
+            raise ValueError("Invalid invite code")
+        
+        if invite.used:
+            raise ValueError("This invite code has already been used")
+        
+        if invite.expires_at < datetime.utcnow():
+            raise ValueError("This invite code has expired")
+        
+        # Verify the redeemer is a student
+        student = db.query(User).filter(User.user_id == student_id).first()
+        if not student or student.user_type != UserType.STUDENT:
+            raise ValueError("Only students can redeem invite codes")
+        
+        # Check if relationship already exists
+        existing = db.query(UserRelationship).filter(
+            UserRelationship.guardian_id == invite.creator_id,
+            UserRelationship.student_id == student_id
+        ).first()
+        
+        if existing:
+            raise ValueError("You are already linked to this teacher/parent")
+        
+        # Determine relationship type
+        relationship_type = "teacher-student" if invite.creator_type == UserType.TEACHER else "parent-child"
+        
+        # Create relationship
+        relationship = UserRelationship(
+            guardian_id=invite.creator_id,
+            student_id=student_id,
+            relationship_type=relationship_type
+        )
+        
+        # Mark invite as used
+        invite.used = True
+        invite.used_by = student_id
+        
+        db.add(relationship)
+        db.commit()
+        db.refresh(relationship)
+        
+        return relationship
+
+
+# ==================== RELATIONSHIP SERVICES ====================
+
+class RelationshipService:
+    """Service for managing user relationships."""
+    
+    @staticmethod
+    def get_linked_students(db: Session, guardian_id: int) -> List[LinkedStudentResponse]:
+        """Get all students linked to a teacher/parent."""
+        relationships = db.query(UserRelationship).filter(
+            UserRelationship.guardian_id == guardian_id
+        ).all()
+        
+        students = []
+        for rel in relationships:
+            student = db.query(User).filter(User.user_id == rel.student_id).first()
+            if student:
+                students.append(LinkedStudentResponse(
+                    user_id=student.user_id,
+                    full_name=student.full_name,
+                    email=student.email,
+                    grade_level=student.grade_level,
+                    school_name=student.school_name,
+                    relationship_type=rel.relationship_type,
+                    linked_at=rel.created_at
+                ))
+        
+        return students
+    
+    @staticmethod
+    def get_linked_guardians(db: Session, student_id: int) -> List[LinkedGuardianResponse]:
+        """Get all teachers/parents linked to a student."""
+        relationships = db.query(UserRelationship).filter(
+            UserRelationship.student_id == student_id
+        ).all()
+        
+        guardians = []
+        for rel in relationships:
+            guardian = db.query(User).filter(User.user_id == rel.guardian_id).first()
+            if guardian:
+                guardians.append(LinkedGuardianResponse(
+                    user_id=guardian.user_id,
+                    full_name=guardian.full_name,
+                    email=guardian.email,
+                    user_type=guardian.user_type,
+                    relationship_type=rel.relationship_type,
+                    linked_at=rel.created_at
+                ))
+        
+        return guardians
+    
+    @staticmethod
+    def verify_relationship(db: Session, guardian_id: int, student_id: int) -> bool:
+        """Verify that a relationship exists between guardian and student."""
+        relationship = db.query(UserRelationship).filter(
+            UserRelationship.guardian_id == guardian_id,
+            UserRelationship.student_id == student_id
+        ).first()
+        return relationship is not None
+    
+    @staticmethod
+    def get_student_dashboard(db: Session, guardian_id: int, student_id: int) -> StudentDashboardResponse:
+        """Get dashboard data for a student (for teacher/parent view)."""
+        # Verify relationship exists
+        if not RelationshipService.verify_relationship(db, guardian_id, student_id):
+            raise ValueError("You do not have permission to view this student's data")
+        
+        # Get student info
+        student = db.query(User).filter(User.user_id == student_id).first()
+        if not student:
+            raise ValueError("Student not found")
+        
+        # Get latest report
+        latest_report = db.query(AcademicReport).filter(
+            AcademicReport.user_id == student_id
+        ).order_by(AcademicReport.report_date.desc()).first()
+        
+        if not latest_report:
+            return StudentDashboardResponse(
+                student_id=student_id,
+                student_name=student.full_name,
+                overall_gpa=0.0,
+                total_subjects=0,
+                strong_subjects=[],
+                weak_subjects=[],
+                recent_reports=[],
+                improving_subjects=[],
+                declining_subjects=[]
+            )
+        
+        # Get subject performances
+        subject_perfs = db.query(SubjectPerformance).filter(
+            SubjectPerformance.user_id == student_id
+        ).all()
+        
+        strong_subjects = [sp.subject for sp in subject_perfs if sp.strength_score >= 70]
+        weak_subjects = [sp.subject for sp in subject_perfs if sp.strength_score < 60]
+        improving = [sp.subject for sp in subject_perfs if sp.trend == "improving"]
+        declining = [sp.subject for sp in subject_perfs if sp.trend == "declining"]
+        
+        # Get recent reports
+        recent_reports = db.query(AcademicReport).filter(
+            AcademicReport.user_id == student_id
+        ).order_by(AcademicReport.report_date.desc()).limit(5).all()
+        
+        return StudentDashboardResponse(
+            student_id=student_id,
+            student_name=student.full_name,
+            overall_gpa=latest_report.overall_gpa or 0.0,
+            total_subjects=len(latest_report.grades_json),
+            strong_subjects=strong_subjects,
+            weak_subjects=weak_subjects,
+            recent_reports=[ReportResponse.model_validate(r) for r in recent_reports],
+            improving_subjects=improving,
+            declining_subjects=declining
+        )
+    
+    @staticmethod
+    def remove_relationship(db: Session, guardian_id: int, student_id: int) -> bool:
+        """Remove a relationship between guardian and student."""
+        relationship = db.query(UserRelationship).filter(
+            UserRelationship.guardian_id == guardian_id,
+            UserRelationship.student_id == student_id
+        ).first()
+        
+        if not relationship:
+            return False
+        
+        db.delete(relationship)
+        db.commit()
+        return True
 
 
 

@@ -9,6 +9,9 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
 import Dashboard from "./pages/Dashboard";
+import TeacherDashboard from "./pages/TeacherDashboard";
+import ParentDashboard from "./pages/ParentDashboard";
+import StudentView from "./pages/StudentView";
 import Reports from "./pages/Reports";
 import UploadReport from "./pages/UploadReport";
 import ReportDetail from "./pages/ReportDetail";
@@ -28,6 +31,7 @@ import Insights from "./pages/Insights";
 import InsightDetail from "./pages/InsightDetail";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
+import RoleBasedDashboard from "./components/RoleBasedDashboard";
 
 const queryClient = new QueryClient();
 
@@ -44,7 +48,18 @@ const App = () => (
           <Route path="/forgot-password" element={<ForgotPassword />} />
           
           {/* Protected Routes */}
-          <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          {/* Role-based dashboard redirect */}
+          <Route path="/dashboard" element={<ProtectedRoute><RoleBasedDashboard /></ProtectedRoute>} />
+          
+          {/* Role-specific dashboards */}
+          <Route path="/student/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          <Route path="/teacher/dashboard" element={<ProtectedRoute><TeacherDashboard /></ProtectedRoute>} />
+          <Route path="/parent/dashboard" element={<ProtectedRoute><ParentDashboard /></ProtectedRoute>} />
+          
+          {/* Student view for teachers/parents */}
+          <Route path="/students/:id" element={<ProtectedRoute><StudentView /></ProtectedRoute>} />
+          
+          {/* Student-specific routes (also accessible by teachers/parents for their students) */}
           <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
           <Route path="/reports/upload" element={<ProtectedRoute><UploadReport /></ProtectedRoute>} />
           <Route path="/reports/:id" element={<ProtectedRoute><ReportDetail /></ProtectedRoute>} />

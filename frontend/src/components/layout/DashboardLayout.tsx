@@ -31,8 +31,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
-const navigation = [
-  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+// Navigation items by user type
+const studentNavigation = [
+  { name: "Dashboard", href: "/student/dashboard", icon: LayoutDashboard },
   { name: "Reports", href: "/reports", icon: FileText },
   { name: "Performance", href: "/performance", icon: TrendingUp },
   { name: "Flashcards", href: "/flashcards", icon: Brain },
@@ -42,12 +43,36 @@ const navigation = [
   { name: "Settings", href: "/settings", icon: Settings },
 ];
 
+const teacherNavigation = [
+  { name: "Dashboard", href: "/teacher/dashboard", icon: LayoutDashboard },
+  { name: "My Students", href: "/teacher/dashboard", icon: GraduationCap },
+  { name: "Settings", href: "/settings", icon: Settings },
+];
+
+const parentNavigation = [
+  { name: "Dashboard", href: "/parent/dashboard", icon: LayoutDashboard },
+  { name: "My Child", href: "/parent/dashboard", icon: GraduationCap },
+  { name: "Settings", href: "/settings", icon: Settings },
+];
+
+const getNavigation = (userType?: string) => {
+  switch (userType) {
+    case "teacher":
+      return teacherNavigation;
+    case "parent":
+      return parentNavigation;
+    default:
+      return studentNavigation;
+  }
+};
+
 interface DashboardLayoutProps {
   children: ReactNode;
 }
 
-const Sidebar = () => {
+const Sidebar = ({ userType }: { userType?: string }) => {
   const location = useLocation();
+  const navigation = getNavigation(userType);
 
   return (
     <div className="flex flex-col h-full bg-card border-r border-border">
@@ -62,7 +87,8 @@ const Sidebar = () => {
       
       <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
         {navigation.map((item) => {
-          const isActive = location.pathname === item.href;
+          const isActive = location.pathname === item.href || 
+            (item.href !== "/settings" && location.pathname.startsWith(item.href));
           return (
             <Link
               key={item.name}
@@ -115,11 +141,13 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const userName = user?.full_name || "User";
   const userEmail = user?.email || "";
 
+  const userType = user?.user_type;
+
   return (
     <div className="min-h-screen w-full flex bg-background">
       {/* Desktop Sidebar */}
       <aside className="hidden lg:block w-64 border-r border-border">
-        <Sidebar />
+        <Sidebar userType={userType} />
       </aside>
 
       {/* Main Content */}
@@ -134,7 +162,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
               </Button>
             </SheetTrigger>
             <SheetContent side="left" className="p-0 w-64">
-              <Sidebar />
+              <Sidebar userType={userType} />
             </SheetContent>
           </Sheet>
 

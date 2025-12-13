@@ -465,5 +465,120 @@ export const insightsApi = {
   markAsRead: (insightId: number) => apiClient.put(`/insights/${insightId}/read`),
 };
 
+// Types for invite and relationship APIs
+export interface InviteCode {
+  code_id: number;
+  code: string;
+  creator_type: string;
+  used: boolean;
+  used_by?: number;
+  created_at: string;
+  expires_at: string;
+}
+
+export interface LinkedStudent {
+  user_id: number;
+  full_name: string;
+  email: string;
+  grade_level?: number;
+  school_name?: string;
+  relationship_type: string;
+  linked_at: string;
+}
+
+export interface LinkedGuardian {
+  user_id: number;
+  full_name: string;
+  email: string;
+  user_type: string;
+  relationship_type: string;
+  linked_at: string;
+}
+
+export interface StudentDashboard {
+  student_id: number;
+  student_name: string;
+  overall_gpa: number;
+  total_subjects: number;
+  strong_subjects: string[];
+  weak_subjects: string[];
+  recent_reports: unknown[];
+  improving_subjects: string[];
+  declining_subjects: string[];
+}
+
+export const inviteApi = {
+  generateCode: () => apiClient.post<InviteCode>("/invite/generate"),
+  getMyCodes: () => apiClient.get<InviteCode[]>("/invite/my-codes"),
+  redeemCode: (code: string) => 
+    apiClient.post<{ message: string; success: boolean; data?: { relationship_id: number } }>(
+      "/invite/redeem", 
+      { code }
+    ),
+};
+
+export const relationshipsApi = {
+  getLinkedStudents: () => apiClient.get<LinkedStudent[]>("/relationships/students"),
+  getLinkedGuardians: () => apiClient.get<LinkedGuardian[]>("/relationships/guardians"),
+  getStudentDashboard: (studentId: number) => 
+    apiClient.get<StudentDashboard>(`/students/${studentId}/dashboard`),
+  getStudentReports: (studentId: number, limit?: number) =>
+    apiClient.get(`/students/${studentId}/reports`, limit ? { limit } : undefined),
+  getStudentFlashcards: (studentId: number, subject?: string, limit?: number) =>
+    apiClient.get(`/students/${studentId}/flashcards`, { 
+      ...(subject && { subject }), 
+      ...(limit && { limit }) 
+    }),
+  getStudentCareer: (studentId: number) =>
+    apiClient.get(`/students/${studentId}/career`),
+  getStudentInsights: (studentId: number, limit?: number) =>
+    apiClient.get(`/students/${studentId}/insights`, limit ? { limit } : undefined),
+  createStudentInsight: (studentId: number, data: {
+    insight_type: "feedback" | "tip" | "analysis" | "recommendation" | "motivation";
+    title: string;
+    content: string;
+  }) => apiClient.post(`/students/${studentId}/insights`, { ...data, student_id: studentId }),
+  removeStudentLink: (studentId: number) => 
+    apiClient.delete(`/relationships/${studentId}`),
+};
+
+// Insight types for guardian-created insights
+export type InsightType = "feedback" | "tip" | "analysis" | "recommendation" | "motivation";
+
+export interface StudentInsight {
+  insight_id: number;
+  insight_type: InsightType;
+  title: string;
+  content: string;
+  generated_at: string;
+  is_read: boolean;
+  metadata_json?: {
+    created_by_name?: string;
+    created_by_type?: string;
+    source?: string;
+  };
+}
+
+export interface StudentFlashcard {
+  card_id: number;
+  subject: string;
+  topic?: string;
+  question: string;
+  answer: string;
+  difficulty: string;
+  times_reviewed: number;
+  times_correct: number;
+  mastery_level: number;
+}
+
+export interface StudentCareer {
+  recommendation_id: number;
+  career_path: string;
+  career_description?: string;
+  match_score: number;
+  reasoning?: string;
+  suitable_universities?: string[];
+}
+
 export default apiClient;
 

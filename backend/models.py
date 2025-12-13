@@ -429,6 +429,100 @@ class PaginatedResponse(BaseModel):
     total_pages: int
 
 
+# ==================== INVITE & RELATIONSHIP MODELS ====================
+
+class InviteCodeGenerate(BaseModel):
+    """Request to generate an invite code."""
+    pass  # No parameters needed, uses authenticated user
+
+
+class InviteCodeResponse(BaseModel):
+    """Invite code response model."""
+    code_id: int
+    code: str
+    creator_type: UserType
+    used: bool
+    used_by: Optional[int]
+    created_at: datetime
+    expires_at: datetime
+    
+    model_config = {"from_attributes": True}
+
+
+class InviteCodeRedeem(BaseModel):
+    """Request to redeem an invite code."""
+    code: str = Field(..., min_length=8, max_length=8)
+
+
+class UserRelationshipResponse(BaseModel):
+    """User relationship response model."""
+    relationship_id: int
+    guardian_id: int
+    student_id: int
+    relationship_type: str
+    created_at: datetime
+    
+    model_config = {"from_attributes": True}
+
+
+class LinkedStudentResponse(BaseModel):
+    """Response for a linked student's basic info."""
+    user_id: int
+    full_name: str
+    email: str
+    grade_level: Optional[int]
+    school_name: Optional[str]
+    relationship_type: str
+    linked_at: datetime
+
+
+class LinkedGuardianResponse(BaseModel):
+    """Response for a linked guardian's basic info."""
+    user_id: int
+    full_name: str
+    email: str
+    user_type: UserType
+    relationship_type: str
+    linked_at: datetime
+
+
+class StudentDashboardResponse(BaseModel):
+    """Dashboard data for a student (viewed by teacher/parent)."""
+    student_id: int
+    student_name: str
+    overall_gpa: float
+    total_subjects: int
+    strong_subjects: List[str]
+    weak_subjects: List[str]
+    recent_reports: List[ReportResponse]
+    improving_subjects: List[str]
+    declining_subjects: List[str]
+
+
+class GuardianInsightCreate(BaseModel):
+    """Request to create an insight for a student from teacher/parent."""
+    student_id: int
+    insight_type: InsightType
+    title: str = Field(..., min_length=3, max_length=200)
+    content: str = Field(..., min_length=10)
+
+
+class GuardianInsightResponse(BaseModel):
+    """Response for a guardian-created insight."""
+    insight_id: int
+    student_id: int
+    insight_type: InsightType
+    title: str
+    content: str
+    created_by: int
+    created_by_name: str
+    created_by_type: UserType
+    created_at: datetime
+    is_read: bool
+    
+    model_config = {"from_attributes": True}
+
+
 # ==================== VALIDATORS ====================
 
 def validate_kenyan_grade(grade: str) -> str:
