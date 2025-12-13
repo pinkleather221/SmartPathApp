@@ -385,14 +385,16 @@ class StudySessionResponse(BaseModel):
 class LearningInsightResponse(BaseModel):
     """Learning insight response model."""
     insight_id: int
+    user_id: int
     insight_type: InsightType
     title: Optional[str]
     content: str
-    metadata: Optional[Dict[str, Any]] = Field(None, alias="metadata_json")
+    metadata_json: Optional[Dict[str, Any]] = None
     generated_at: datetime
     is_read: bool
-    
-    model_config = {"from_attributes": True, "populate_by_name": True}
+    created_by: Optional[int] = None
+
+    model_config = {"from_attributes": True}
 
 
 class AcademicFeedback(BaseModel):
@@ -501,7 +503,6 @@ class StudentDashboardResponse(BaseModel):
 
 class GuardianInsightCreate(BaseModel):
     """Request to create an insight for a student from teacher/parent."""
-    student_id: int
     insight_type: InsightType
     title: str = Field(..., min_length=3, max_length=200)
     content: str = Field(..., min_length=10)

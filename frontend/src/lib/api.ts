@@ -537,7 +537,7 @@ export const relationshipsApi = {
     insight_type: "feedback" | "tip" | "analysis" | "recommendation" | "motivation";
     title: string;
     content: string;
-  }) => apiClient.post(`/students/${studentId}/insights`, { ...data, student_id: studentId }),
+  }) => apiClient.post(`/students/${studentId}/insights`, data),
   removeStudentLink: (studentId: number) => 
     apiClient.delete(`/relationships/${studentId}`),
 };
