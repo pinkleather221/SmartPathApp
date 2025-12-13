@@ -197,7 +197,7 @@ const Insights = () => {
                             </div>
                             <CardTitle className="text-lg">{insight.title || "Learning Insight"}</CardTitle>
                             <CardDescription className="mt-1">
-                              {new Date(insight.generated_at || insight.created_at).toLocaleString()}
+                              {new Date(insight.generated_at).toLocaleString()}
                             </CardDescription>
                           </div>
                         </div>
