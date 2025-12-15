@@ -25,22 +25,6 @@ import {
 import { performanceApi, reportsApi, insightsApi } from "@/lib/api";
 import { getCurrentUser as getAuthUser } from "@/lib/auth";
 
-// Convert GPA (0-4 scale) to Kenyan grade (A-E)
-const gpaToKenyanGrade = (gpa: number): string => {
-  if (gpa >= 3.7) return "A";
-  if (gpa >= 3.3) return "A-";
-  if (gpa >= 3.0) return "B+";
-  if (gpa >= 2.7) return "B";
-  if (gpa >= 2.3) return "B-";
-  if (gpa >= 2.0) return "C+";
-  if (gpa >= 1.7) return "C";
-  if (gpa >= 1.3) return "C-";
-  if (gpa >= 1.0) return "D+";
-  if (gpa >= 0.7) return "D";
-  if (gpa >= 0.3) return "D-";
-  return "E";
-};
-
 const Dashboard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -103,19 +87,17 @@ const Dashboard = () => {
               <Award className="w-4 h-4 text-accent" />
             </CardHeader>
             <CardContent>
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-bold text-foreground">
-                  {loading ? "..." : ((dashboard as { overall_gpa?: number })?.overall_gpa?.toFixed(2) || "0.00")}
-                </span>
-                {!loading && (dashboard as { overall_gpa?: number })?.overall_gpa !== undefined && (
-                  <Badge variant="secondary" className="text-base font-semibold">
-                    {gpaToKenyanGrade((dashboard as { overall_gpa?: number })?.overall_gpa || 0)}
-                  </Badge>
+              <div className="text-3xl font-bold text-foreground">
+                {loading ? "..." : ((dashboard as { overall_gpa?: number })?.overall_gpa?.toFixed(2) || "0.00")}
+              </div>
+              <div className="flex items-center text-sm text-success mt-1">
+                {((dashboard as { overall_gpa?: number })?.overall_gpa || 0) > 0 && (
+                  <>
+                    <ArrowUpRight className="w-4 h-4 mr-1" />
+                    <span>Current GPA</span>
+                  </>
                 )}
               </div>
-              <p className="text-sm text-muted-foreground mt-1">
-                Current GPA / Grade
-              </p>
             </CardContent>
           </Card>
 

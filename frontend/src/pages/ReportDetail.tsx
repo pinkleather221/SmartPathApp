@@ -34,22 +34,6 @@ import {
 import { reportsApi } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
-// Convert GPA (0-4 scale) to Kenyan grade (A-E)
-const gpaToKenyanGrade = (gpa: number): string => {
-  if (gpa >= 3.7) return "A";
-  if (gpa >= 3.3) return "A-";
-  if (gpa >= 3.0) return "B+";
-  if (gpa >= 2.7) return "B";
-  if (gpa >= 2.3) return "B-";
-  if (gpa >= 2.0) return "C+";
-  if (gpa >= 1.7) return "C";
-  if (gpa >= 1.3) return "C-";
-  if (gpa >= 1.0) return "D+";
-  if (gpa >= 0.7) return "D";
-  if (gpa >= 0.3) return "D-";
-  return "E";
-};
-
 const ReportDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -194,14 +178,9 @@ const ReportDetail = () => {
               <CardContent className="pt-6">
                 <div className="text-center">
                   <p className="text-sm text-muted-foreground mb-2">Overall GPA</p>
-                  <div className="flex items-center justify-center gap-3">
-                    <p className="text-6xl font-bold text-primary">
-                      {(report.overall_gpa || 0).toFixed(1)}
-                    </p>
-                    <Badge variant="secondary" className="text-2xl font-bold px-4 py-2">
-                      {gpaToKenyanGrade(report.overall_gpa || 0)}
-                    </Badge>
-                  </div>
+                  <p className="text-6xl font-bold text-primary">
+                    {(report.overall_gpa || 0).toFixed(1)}
+                  </p>
                   <p className="text-sm text-muted-foreground mt-2">
                     {Object.keys(report.grades_json || {}).length} Subjects
                   </p>

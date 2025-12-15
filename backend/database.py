@@ -112,7 +112,7 @@ class User(Base):
     flashcards = relationship("Flashcard", back_populates="user", cascade="all, delete-orphan")
     career_recommendations = relationship("CareerRecommendation", back_populates="user", cascade="all, delete-orphan")
     study_plans = relationship("StudyPlan", back_populates="user", cascade="all, delete-orphan")
-    insights = relationship("LearningInsight", back_populates="user", primaryjoin="User.user_id == LearningInsight.user_id", foreign_keys="LearningInsight.user_id", cascade="all, delete-orphan")
+    insights = relationship("LearningInsight", back_populates="user", foreign_keys="LearningInsight.user_id", cascade="all, delete-orphan")
 
 
 class AcademicReport(Base):

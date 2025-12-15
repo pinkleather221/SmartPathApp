@@ -5,25 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { TrendingUp, TrendingDown, Minus, Target, LineChart, Loader2 } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus, Target, BarChart3, LineChart, Loader2 } from "lucide-react";
 import { performanceApi } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
-
-// Convert GPA (0-4 scale) to Kenyan grade (A-E)
-const gpaToKenyanGrade = (gpa: number): string => {
-  if (gpa >= 3.7) return "A";
-  if (gpa >= 3.3) return "A-";
-  if (gpa >= 3.0) return "B+";
-  if (gpa >= 2.7) return "B";
-  if (gpa >= 2.3) return "B-";
-  if (gpa >= 2.0) return "C+";
-  if (gpa >= 1.7) return "C";
-  if (gpa >= 1.3) return "C-";
-  if (gpa >= 1.0) return "D+";
-  if (gpa >= 0.7) return "D";
-  if (gpa >= 0.3) return "D-";
-  return "E";
-};
 
 const Performance = () => {
   const { toast } = useToast();
@@ -110,14 +94,9 @@ const Performance = () => {
           <Card>
             <CardHeader>
               <CardDescription>Overall GPA</CardDescription>
-              <div className="flex items-baseline gap-2">
-                <CardTitle className={`text-4xl ${getGradeColor(overallGPA)}`}>
-                  {overallGPA.toFixed(1)}
-                </CardTitle>
-                <Badge variant="secondary" className="text-lg font-semibold">
-                  {gpaToKenyanGrade(overallGPA)}
-                </Badge>
-              </div>
+              <CardTitle className={`text-4xl ${getGradeColor(overallGPA)}`}>
+                {overallGPA.toFixed(1)}
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">
@@ -158,6 +137,10 @@ const Performance = () => {
         <div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-2xl font-bold">Subject Performance</h2>
+            <Button variant="outline">
+              <BarChart3 className="w-4 h-4 mr-2" />
+              Compare All
+            </Button>
           </div>
 
           {loading ? (

@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, BookOpen, TrendingUp, Briefcase, Loader2, AlertCircle } from "lucide-react";
+import { ArrowLeft, Star, Share2, BookOpen, TrendingUp, Briefcase, Loader2, AlertCircle } from "lucide-react";
 import { careerApi } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
@@ -143,6 +143,16 @@ const CareerDetail = () => {
                 Detailed career information and requirements
               </p>
             </div>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" disabled={career.is_favorite}>
+              <Star className={`w-4 h-4 mr-2 ${career.is_favorite ? "fill-yellow-400" : ""}`} />
+              {career.is_favorite ? "Saved" : "Save Favorite"}
+            </Button>
+            <Button variant="outline">
+              <Share2 className="w-4 h-4 mr-2" />
+              Share
+            </Button>
           </div>
         </div>
 

@@ -152,7 +152,7 @@ const Career = () => {
                     </div>
                   )}
 
-                  <Link to={`/career/${rec.recommendation_id || rec.career_id}`} className="block mt-4">
+                  <Link to={`/career/${rec.recommendation_id || rec.career_id}`}>
                     <Button variant="outline" className="w-full" size="sm">
                       View Details
                       <ArrowRight className="w-4 h-4 ml-2" />

@@ -34,22 +34,6 @@ import {
 } from "lucide-react";
 import { relationshipsApi, InsightType } from "@/lib/api";
 
-// Convert GPA (0-4 scale) to Kenyan grade (A-E)
-const gpaToKenyanGrade = (gpa: number): string => {
-  if (gpa >= 3.7) return "A";
-  if (gpa >= 3.3) return "A-";
-  if (gpa >= 3.0) return "B+";
-  if (gpa >= 2.7) return "B";
-  if (gpa >= 2.3) return "B-";
-  if (gpa >= 2.0) return "C+";
-  if (gpa >= 1.7) return "C";
-  if (gpa >= 1.3) return "C-";
-  if (gpa >= 1.0) return "D+";
-  if (gpa >= 0.7) return "D";
-  if (gpa >= 0.3) return "D-";
-  return "E";
-};
-
 const StudentView = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -217,13 +201,8 @@ const StudentView = () => {
                   <Award className="w-4 h-4 text-accent" />
                 </CardHeader>
                 <CardContent>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-3xl font-bold text-foreground">
-                      {dashboard?.overall_gpa?.toFixed(2) || "0.00"}
-                    </span>
-                    <Badge variant="secondary" className="text-base font-semibold">
-                      {gpaToKenyanGrade(dashboard?.overall_gpa || 0)}
-                    </Badge>
+                  <div className="text-3xl font-bold text-foreground">
+                    {dashboard?.overall_gpa?.toFixed(2) || "0.00"}
                   </div>
                   <Progress value={(dashboard?.overall_gpa || 0) * 25} className="mt-2 h-2" />
                 </CardContent>
@@ -348,15 +327,10 @@ const StudentView = () => {
                                 </div>
                                 <div className="flex items-center gap-3">
                                   <div className="text-right">
-                                    <div className="flex items-center gap-2 justify-end">
-                                      <span className="text-xl font-bold text-foreground">
-                                        {r.overall_gpa?.toFixed(1) || "0.0"}
-                                      </span>
-                                      <Badge variant="secondary" className="text-sm font-semibold">
-                                        {gpaToKenyanGrade(r.overall_gpa || 0)}
-                                      </Badge>
+                                    <div className="text-xl font-bold text-foreground">
+                                      {r.overall_gpa?.toFixed(1) || "0.0"}
                                     </div>
-                                    <Badge variant="outline" className="mt-1">
+                                    <Badge variant="outline">
                                       {Object.keys(r.grades_json || {}).length} subjects
                                     </Badge>
                                   </div>
