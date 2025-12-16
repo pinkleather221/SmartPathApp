@@ -130,7 +130,7 @@ const TeacherDashboard = () => {
                   Generate an invite code and share it with your students to start
                   monitoring their progress.
                 </p>
-                <Button onClick={() => navigate("/settings")}>
+                <Button onClick={() => navigate("/settings?tab=connections")}>
                   <UserPlus className="w-4 h-4 mr-2" />
                   Generate Invite Code
                 </Button>

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -298,6 +299,14 @@ const ConnectionsSection = ({ userType }: { userType?: string }) => {
 const Settings = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
+  
+  // Get active tab from URL, default to "profile"
+  const activeTab = searchParams.get("tab") || "profile";
+  
+  const handleTabChange = (value: string) => {
+    setSearchParams({ tab: value });
+  };
   
   // Fetch current user profile
   const { data: user, isLoading } = useQuery({
@@ -388,7 +397,7 @@ const Settings = () => {
           </p>
         </div>
 
-        <Tabs defaultValue="profile" className="space-y-6">
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
           <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="profile">
               <User className="w-4 h-4 mr-2" />
