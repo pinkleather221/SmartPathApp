@@ -87,9 +87,18 @@ class ApiClient {
     }
 
     if (!response.ok) {
-      const error = (data as ApiResponse<T>).detail || (data as ApiResponse<T>).message || `Request failed with status ${response.status}`;
+      // Handle validation errors (422) which have detailed error structure
+      let errorMessage = (data as ApiResponse<T>).message || `Request failed with status ${response.status}`;
+      if (response.status === 422 && (data as any).detail && Array.isArray((data as any).detail)) {
+        const validationErrors = (data as any).detail;
+        errorMessage = validationErrors.map((err: any) =>
+          `${err.loc?.join('.') || 'unknown'}: ${err.msg || 'Unknown error'}`
+        ).join(', ');
+      } else {
+        errorMessage = (data as ApiResponse<T>).detail || errorMessage;
+      }
       console.error(`[API] Error response (${response.status}):`, data);
-      throw new Error(error);
+      throw new Error(errorMessage);
     }
 
     // Handle different response structures
@@ -452,6 +461,7 @@ export const studyPlansApi = {
     subject: string;
     duration_minutes: number;
     completed: boolean;
+    notes?: string;
     topics_covered?: string[];
   }) => apiClient.post(`/study-plans/${planId}/log-session`, data),
 };

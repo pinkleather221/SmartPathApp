@@ -30,7 +30,7 @@ type StudyPlan = {
   description?: string;
   start_date?: string;
   end_date?: string;
-  progress_percentage?: number;
+  progress_percentage: number;
   available_hours_per_day?: number;
   priority?: string | number;
   is_active?: boolean;
@@ -94,7 +94,7 @@ const StudyPlanDetail = () => {
     }
   };
 
-  const progressPct = useMemo(() => Math.round(plan?.progress_percentage || 0), [plan]);
+  const progressPct = useMemo(() => Math.round(plan?.progress_percentage ?? 0), [plan]);
   const totalHours = useMemo(() => {
     const sessions = plan?.sessions || [];
     const minutes = sessions.reduce((sum, s) => sum + (s.duration_minutes || 0), 0);
@@ -107,15 +107,47 @@ const StudyPlanDetail = () => {
     return Math.max(0, Math.ceil((end - now) / (1000 * 60 * 60 * 24)));
   }, [plan]);
 
-  const handleLogSession = () => {
-    toast({
-      title: "Session Logged!",
-      description: "Your study session has been recorded.",
-    });
-    setLogSessionOpen(false);
-    setSessionDuration("120");
-    setSessionTopics("");
-    setSessionNotes("");
+  const handleLogSession = async () => {
+    if (!plan) return;
+
+    try {
+      // Parse topics from comma-separated string
+      const topicsArray = sessionTopics
+        .split(',')
+        .map(topic => topic.trim())
+        .filter(topic => topic.length > 0);
+
+      // Log the session via API
+      await studyPlansApi.logSession(plan.plan_id, {
+        subject: plan.subject || "Study Session",
+        duration_minutes: parseInt(sessionDuration),
+        completed: true,
+        notes: sessionNotes.trim() || undefined,
+        topics_covered: topicsArray.length > 0 ? topicsArray : undefined,
+      });
+
+      // Reload the plan to get updated sessions
+      const updatedPlan = await studyPlansApi.getById(Number(id));
+      setPlan(updatedPlan || plan);
+
+      toast({
+        title: "Session Logged!",
+        description: "Your study session has been recorded successfully.",
+      });
+
+      // Reset form
+      setLogSessionOpen(false);
+      setSessionDuration("120");
+      setSessionTopics("");
+      setSessionNotes("");
+
+    } catch (error) {
+      toast({
+        title: "Error Logging Session",
+        description: error instanceof Error ? error.message : "Failed to log study session",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleUpdateStatus = (newStatus: string) => {

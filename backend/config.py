@@ -127,7 +127,7 @@ class Settings(BaseSettings):
         return self.ENVIRONMENT.lower() == "production" or os.getenv("RENDER") == "true"
     
     # Kenyan Context
-    DEFAULT_CURRICULUM: str = "CBC"  # CBC or 8-4-4
+    DEFAULT_CURRICULUM: str = "CBE"  # CBE or 8-4-4
     DEFAULT_TIMEZONE: str = "Africa/Nairobi"
     
     # Feature Flags

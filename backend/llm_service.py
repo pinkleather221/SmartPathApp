@@ -209,7 +209,7 @@ class LLMService:
         topic: Optional[str],
         grade_level: int,
         count: int = 5,
-        curriculum: str = "CBC"
+        curriculum: str = "CBE"
     ) -> List[Dict[str, str]]:
         """Generate flashcards for a subject and topic."""
         prompt = f"""Generate {count} educational flashcards for a Kenyan high school student in Grade {grade_level} studying {subject}.
@@ -253,7 +253,7 @@ Make questions progressively more challenging. Ensure content is relevant to Ken
         current_grades: Dict[str, str],
         previous_grades: Optional[Dict[str, str]],
         grade_level: int,
-        curriculum: str = "CBC"
+        curriculum: str = "CBE"
     ) -> Dict[str, Any]:
         """Generate personalized academic feedback."""
         prompt = f"""Analyze the academic performance of a Grade {grade_level} Kenyan student (Curriculum: {curriculum}).

@@ -780,12 +780,13 @@ async def get_active_study_plans(
 ):
     """Get active study plans."""
     from database import StudyPlan, PlanStatus
-    
-    plans = db.query(StudyPlan).filter(
+    from sqlalchemy.orm import joinedload
+
+    plans = db.query(StudyPlan).options(joinedload(StudyPlan.sessions)).filter(
         StudyPlan.user_id == current_user.user_id,
         StudyPlan.status == PlanStatus.ACTIVE
     ).all()
-    
+
     return [StudyPlanResponse.model_validate(plan) for plan in plans]
 
 
@@ -863,8 +864,9 @@ async def log_study_session(
     db: Session = Depends(get_db)
 ):
     """Log a study session."""
-    from database import StudySession
-    
+    from database import StudySession, StudyPlan
+    from sqlalchemy.orm import joinedload
+
     session = StudySession(
         user_id=current_user.user_id,
         plan_id=plan_id if plan_id > 0 else None,
@@ -874,11 +876,39 @@ async def log_study_session(
         notes=session_data.notes,
         topics_covered=session_data.topics_covered
     )
-    
+
     db.add(session)
     db.commit()
     db.refresh(session)
-    
+
+    # Update the study plan's progress percentage
+    if plan_id > 0:
+        plan = db.query(StudyPlan).options(joinedload(StudyPlan.sessions)).filter(
+            StudyPlan.plan_id == plan_id,
+            StudyPlan.user_id == current_user.user_id
+        ).first()
+
+        if plan:
+            # Calculate total actual hours from all sessions
+            actual_hours = sum(s.duration_minutes for s in plan.sessions) / 60
+
+            # Calculate total planned hours
+            if plan.start_date and plan.end_date and plan.daily_duration_minutes:
+                days_diff = (plan.end_date - plan.start_date).days + 1  # Include both start and end dates
+                planned_hours = (days_diff * plan.daily_duration_minutes) / 60
+
+                # Calculate progress percentage
+                if planned_hours > 0:
+                    progress_percentage = min(100.0, (actual_hours / planned_hours) * 100)
+                else:
+                    progress_percentage = 0.0
+            else:
+                progress_percentage = 0.0
+
+            # Update the progress percentage in the database
+            plan.progress_percentage = progress_percentage
+            db.commit()
+
     return StudySessionResponse.model_validate(session)
 
 

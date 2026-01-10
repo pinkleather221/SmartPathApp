@@ -768,7 +768,7 @@ class InsightService:
             current_grades=current,
             previous_grades=previous,
             grade_level=user.grade_level or 10,
-            curriculum=user.curriculum_type.value if user.curriculum_type else "CBC"
+            curriculum=user.curriculum_type.value if user.curriculum_type else "CBE"
         )
         
         # Save as insight

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, EmailStr, Field, validator
+from pydantic import BaseModel, EmailStr, Field, validator, ValidationError
 from enum import Enum
 
 
@@ -19,7 +19,7 @@ class UserType(str, Enum):
 
 
 class CurriculumType(str, Enum):
-    CBC = "CBC"
+    CBE = "CBE"
     EIGHT_FOUR_FOUR = "8-4-4"
 
 
@@ -52,10 +52,18 @@ class UserRegister(BaseModel):
     password: str = Field(..., min_length=8, max_length=100)
     full_name: str = Field(..., min_length=2, max_length=255)
     user_type: UserType = UserType.STUDENT
-    grade_level: Optional[int] = Field(None, ge=7, le=12)
-    curriculum_type: CurriculumType = CurriculumType.CBC
+    grade_level: Optional[int] = Field(None, ge=3, le=12)
+    curriculum_type: CurriculumType = CurriculumType.CBE
     phone_number: Optional[str] = None
     school_name: Optional[str] = None
+
+    @validator('grade_level')
+    def validate_grade_level_for_students(cls, v, values):
+        """Validate that students have grade_level."""
+        user_type = values.get('user_type')
+        if user_type == UserType.STUDENT and v is None:
+            raise ValueError("grade_level is required for students")
+        return v
 
 
 class UserLogin(BaseModel):
@@ -91,7 +99,7 @@ class UserProfileUpdate(BaseModel):
     full_name: Optional[str] = Field(None, min_length=2, max_length=255)
     phone_number: Optional[str] = None
     school_name: Optional[str] = None
-    grade_level: Optional[int] = Field(None, ge=7, le=12)
+    grade_level: Optional[int] = Field(None, ge=3, le=12)
     curriculum_type: Optional[CurriculumType] = None
 
 
@@ -184,7 +192,7 @@ class FlashcardGenerate(BaseModel):
     topic: Optional[str] = None
     count: int = Field(5, ge=1, le=20)
     difficulty: Optional[DifficultyLevel] = None
-    grade_level: Optional[int] = Field(None, ge=7, le=12)
+    grade_level: Optional[int] = Field(None, ge=3, le=12)
 
 
 class FlashcardResponse(BaseModel):
@@ -316,6 +324,7 @@ class StudyPlanResponse(BaseModel):
     # Expose as 'weekly_schedule' to clients, map from DB field 'weekly_schedule_json'
     weekly_schedule: List[Dict[str, Any]] = Field(default_factory=list, alias="weekly_schedule_json", description="Weekly study schedule")
     sessions: List["StudySessionResponse"] = Field(default_factory=list, description="Study sessions")
+    progress_percentage: float = Field(default=0.0, description="Progress percentage based on logged sessions vs planned time")
     created_at: datetime
     
     @classmethod
@@ -353,7 +362,57 @@ class StudyPlanResponse(BaseModel):
                 )
             if hasattr(obj, "weekly_schedule_json") and obj.weekly_schedule_json is None:
                 obj.weekly_schedule_json = []
-        return super().model_validate(obj, **kwargs)
+
+        # Calculate progress percentage
+        progress_percentage = 0.0
+        # Check if we have the required fields for progress calculation
+        start_date = None
+        end_date = None
+        daily_duration_minutes = None
+
+        if isinstance(obj, dict):
+            if "start_date" in obj and "end_date" in obj and "daily_duration_minutes" in obj:
+                start_date = obj["start_date"]
+                end_date = obj["end_date"]
+                daily_duration_minutes = obj["daily_duration_minutes"]
+        elif hasattr(obj, "start_date") and hasattr(obj, "end_date") and hasattr(obj, "daily_duration_minutes"):
+            start_date = obj.start_date
+            end_date = obj.end_date
+            daily_duration_minutes = obj.daily_duration_minutes
+
+        if start_date and end_date and daily_duration_minutes:
+            # Calculate total planned hours
+            days_diff = (end_date - start_date).days + 1  # Include both start and end dates
+            planned_hours = (days_diff * daily_duration_minutes) / 60
+
+            # Calculate total actual hours from sessions
+            actual_hours = 0
+            sessions = []
+            if isinstance(obj, dict) and "sessions" in obj:
+                sessions = obj["sessions"] or []
+            elif hasattr(obj, "sessions") and obj.sessions:
+                sessions = obj.sessions
+
+            for session in sessions:
+                if hasattr(session, "duration_minutes"):
+                    actual_hours += session.duration_minutes / 60
+                elif isinstance(session, dict) and "duration_minutes" in session:
+                    actual_hours += session["duration_minutes"] / 60
+
+            # Calculate progress percentage
+            if planned_hours > 0:
+                progress_percentage = min(100.0, (actual_hours / planned_hours) * 100)
+
+        # Set progress_percentage in the object
+        if isinstance(obj, dict):
+            obj["progress_percentage"] = progress_percentage
+
+        validated_obj = super().model_validate(obj, **kwargs)
+
+        # Ensure progress_percentage is set even if it gets overridden
+        validated_obj.progress_percentage = progress_percentage
+
+        return validated_obj
     
     model_config = {"from_attributes": True, "populate_by_name": True}
 

@@ -4,6 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
@@ -321,7 +322,7 @@ const Settings = () => {
   const [phone, setPhone] = useState("");
   const [school, setSchool] = useState("");
   const [gradeLevel, setGradeLevel] = useState("");
-  const [curriculum, setCurriculum] = useState("cbc");
+  const [curriculum, setCurriculum] = useState("cbe");
 
   // Update form when user data loads
   useEffect(() => {
@@ -331,7 +332,7 @@ const Settings = () => {
       setPhone(user.phone_number || "");
       setSchool(user.school_name || "");
       setGradeLevel(user.grade_level?.toString() || "");
-      setCurriculum(user.curriculum_type?.toLowerCase() || "cbc");
+      setCurriculum(user.curriculum_type?.toLowerCase() || "cbe");
     }
   }, [user]);
 
@@ -368,7 +369,7 @@ const Settings = () => {
       phone_number: phone || undefined,
       school_name: school || undefined,
       grade_level: gradeLevel ? parseInt(gradeLevel) : undefined,
-      curriculum_type: curriculum.toUpperCase() === "8-4-4" ? "8-4-4" : "CBC",
+      curriculum_type: curriculum.toUpperCase() === "8-4-4" ? "8-4-4" : "CBE",
     });
   };
 
@@ -385,6 +386,32 @@ const Settings = () => {
       description: "Your account has been permanently deleted.",
       variant: "destructive",
     });
+  };
+
+  // Dynamic grade options based on curriculum
+  const getGradeOptions = () => {
+    if (curriculum === "8-4-4") {
+      return [
+        { value: "3", label: "Form 3" },
+        { value: "4", label: "Form 4" }
+      ];
+    } else {
+      // CBE grades
+      return [
+        { value: "7", label: "Grade 7" },
+        { value: "8", label: "Grade 8" },
+        { value: "9", label: "Grade 9" },
+        { value: "10", label: "Grade 10" },
+        { value: "11", label: "Grade 11" },
+        { value: "12", label: "Grade 12" }
+      ];
+    }
+  };
+
+  // Handle curriculum change - reset grade level when curriculum changes
+  const handleCurriculumChange = (value: string) => {
+    setCurriculum(value);
+    setGradeLevel(""); // Reset grade level when curriculum changes
   };
 
   return (
@@ -474,9 +501,9 @@ const Settings = () => {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {[7, 8, 9, 10, 11, 12].map((grade) => (
-                          <SelectItem key={grade} value={grade.toString()}>
-                            Grade {grade}
+                        {getGradeOptions().map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -485,12 +512,12 @@ const Settings = () => {
 
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Curriculum</label>
-                    <Select value={curriculum} onValueChange={setCurriculum}>
+                    <Select value={curriculum} onValueChange={handleCurriculumChange}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="cbc">CBC</SelectItem>
+                        <SelectItem value="cbe">CBE</SelectItem>
                         <SelectItem value="8-4-4">8-4-4</SelectItem>
                       </SelectContent>
                     </Select>
@@ -603,17 +630,17 @@ const Settings = () => {
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Current Password</label>
-                  <Input type="password" />
+                  <PasswordInput />
                 </div>
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium">New Password</label>
-                  <Input type="password" />
+                  <PasswordInput />
                 </div>
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Confirm New Password</label>
-                  <Input type="password" />
+                  <PasswordInput />
                 </div>
 
                 <Button onClick={handleChangePassword} className="w-full">

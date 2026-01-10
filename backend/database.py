@@ -60,7 +60,7 @@ class UserType(str, enum.Enum):
 
 class CurriculumType(str, enum.Enum):
     """Curriculum type enumeration."""
-    CBC = "CBC"
+    CBE = "CBE"
     EIGHT_FOUR_FOUR = "8-4-4"
 
 
@@ -98,8 +98,8 @@ class User(Base):
     password_hash = Column(String(255), nullable=False)
     full_name = Column(String(255), nullable=False)
     user_type = Column(SQLEnum(UserType), default=UserType.STUDENT, nullable=False)
-    grade_level = Column(Integer, nullable=True)  # 7-12 for high school
-    curriculum_type = Column(SQLEnum(CurriculumType), default=CurriculumType.CBC)
+    grade_level = Column(Integer, nullable=True)  # 3-12 for high school (Form 3-4 for 8-4-4, Grade 7-12 for CBE)
+    curriculum_type = Column(SQLEnum(CurriculumType, values_callable=lambda x: [e.value for e in x]), default=CurriculumType.CBE)
     phone_number = Column(String(20), nullable=True)
     school_name = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)

@@ -193,10 +193,11 @@ const StudyPlans = () => {
                       <div className="space-y-2">
                         <div className="flex items-center justify-between text-sm">
                           <span className="text-muted-foreground">Progress</span>
-                          <span className="font-medium">{plan.progress_percentage || 0}%</span>
+                          <span className="font-medium">{Math.round(plan.progress_percentage)}%</span>
                         </div>
-                        <Progress value={plan.progress_percentage || 0} />
+                        <Progress value={Math.round(plan.progress_percentage)} />
                       </div>
+                      
 
                       <div className="grid grid-cols-2 gap-3 text-sm">
                         <div className="flex items-center gap-2">
