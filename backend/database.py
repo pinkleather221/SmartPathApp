@@ -99,7 +99,7 @@ class User(Base):
     full_name = Column(String(255), nullable=False)
     user_type = Column(SQLEnum(UserType), default=UserType.STUDENT, nullable=False)
     grade_level = Column(Integer, nullable=True)  # 3-12 for high school (Form 3-4 for 8-4-4, Grade 7-12 for CBE)
-    curriculum_type = Column(SQLEnum(CurriculumType, values_callable=lambda x: [e.value for e in x]), default=CurriculumType.CBE)
+    curriculum_type = Column(String(20), default="CBE")
     phone_number = Column(String(20), nullable=True)
     school_name = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
@@ -334,6 +334,30 @@ def init_db():
             except Exception:
                 # Ignore if already TEXT or migration handled elsewhere
                 pass
+
+            # Fix curriculum_type enum data inconsistencies
+            try:
+                # Check for incorrect values and fix them
+                result = conn.execute(text("SELECT COUNT(*) FROM users WHERE curriculum_type = 'EIGHT_FOUR_FOUR'"))
+                count_eight_four_four = result.fetchone()[0]
+
+                result = conn.execute(text("SELECT COUNT(*) FROM users WHERE curriculum_type = 'CBC'"))
+                count_cbc = result.fetchone()[0]
+
+                if count_eight_four_four > 0:
+                    print(f"Fixing {count_eight_four_four} curriculum_type entries from 'EIGHT_FOUR_FOUR' to '8-4-4'")
+                    conn.execute(text("UPDATE users SET curriculum_type = '8-4-4' WHERE curriculum_type = 'EIGHT_FOUR_FOUR'"))
+                    conn.commit()
+
+                if count_cbc > 0:
+                    print(f"Fixing {count_cbc} curriculum_type entries from 'CBC' to 'CBE'")
+                    conn.execute(text("UPDATE users SET curriculum_type = 'CBE' WHERE curriculum_type = 'CBC'"))
+                    conn.commit()
+
+            except Exception as e:
+                # Non-fatal: log and continue
+                print(f"⚠️  Curriculum type data fix warning: {e}")
+
     except Exception as e:
         # Non-fatal: log and continue; migration tools may manage schema in other environments
         print(f"⚠️  Schema check warning: {e}")
