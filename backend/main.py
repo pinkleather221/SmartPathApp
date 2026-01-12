@@ -756,7 +756,8 @@ async def generate_study_plan(
             available_hours=request.available_hours_per_day,
             exam_date=request.exam_date,
             focus_areas=request.focus_areas,
-            priority=_convert_priority_to_int(request.priority) if request.priority else 5 # Convert string priority to int
+            priority=_convert_priority_to_int(request.priority) if request.priority else 5, # Convert string priority to int
+            active_days=request.active_days # Pass active days to service
         )
         
         # Log response details for debugging

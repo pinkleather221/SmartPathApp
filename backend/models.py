@@ -308,6 +308,7 @@ class StudyPlanGenerate(BaseModel):
     exam_date: Optional[datetime] = None
     focus_areas: Optional[Dict[str, List[str]]] = None  # subject -> topics
     priority: Optional[PriorityLevel] = PriorityLevel.MEDIUM
+    active_days: Optional[List[str]] = None # Added active_days for editable schedule
 
 
 class StudyPlanUpdate(BaseModel):
@@ -339,6 +340,11 @@ class StudyPlanResponse(BaseModel):
     sessions: List["StudySessionResponse"] = Field(default_factory=list, description="Study sessions")
     progress_percentage: float = Field(default=0.0, description="Progress percentage based on logged sessions vs planned time")
     created_at: datetime
+
+    # Custom properties for weekly schedule items
+    @property
+    def active_weekly_schedule(self) -> List[Dict[str, Any]]:
+        return [day for day in self.weekly_schedule if day.get("is_active", True)]
     
     @classmethod
     def model_validate(cls, obj, **kwargs):

@@ -529,7 +529,9 @@ class StudyPlanService:
         subjects: List[str],
         available_hours: float,
         exam_date: Optional[datetime] = None,
-        focus_areas: Optional[Dict[str, List[str]]] = None
+        focus_areas: Optional[Dict[str, List[str]]] = None,
+        priority: Optional[int] = 5, # Added priority parameter
+        active_days: Optional[List[str]] = None # Added active_days parameter
     ) -> List[StudyPlan]:
         """Generate study plans using LLM."""
         # Get weak subjects
@@ -596,21 +598,36 @@ class StudyPlanService:
         if not weekly_schedule:
             from datetime import timedelta
             days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-            weekly_schedule = []
+            
+            # Filter days based on active_days if provided, otherwise use all days
+            effective_days = active_days if active_days is not None and len(active_days) > 0 else days
+            
+            weekly_schedule_data = []
             for i, day in enumerate(days):
-                # Distribute subjects across the week
-                subject_index = i % len(subjects) if subjects else 0
-                if subjects:
-                    weekly_schedule.append({
+                if day in effective_days: # Only add active days
+                    # Distribute subjects across the week for active days
+                    subject_index = i % len(subjects) if subjects else 0
+                    if subjects:
+                        weekly_schedule_data.append({
+                            "day": day,
+                            "is_active": True, # Mark as active
+                            "subjects": [{
+                                "subject": subjects[subject_index],
+                                "duration_minutes": int((available_hours * 60) / len(effective_days)), # Divide by active days
+                                "focus": f"Review key concepts and practice problems",
+                                "priority": 8 if subjects[subject_index] in weak_subject_names else 5
+                            }]
+                        })
+                else:
+                    weekly_schedule_data.append({
                         "day": day,
-                        "subjects": [{
-                            "subject": subjects[subject_index],
-                            "duration_minutes": int((available_hours * 60) / len(subjects)),
-                            "focus": f"Review key concepts and practice problems",
-                            "priority": 8 if subjects[subject_index] in weak_subject_names else 5
-                        }]
+                        "is_active": False, # Mark as inactive
+                        "subjects": [],
+                        "duration_minutes": 0,
+                        "focus": "",
+                        "priority": 0
                     })
-
+            weekly_schedule = weekly_schedule_data
         for subject in subjects:
             # Calculate duration based on priority
             priority = 5
@@ -694,7 +711,7 @@ class StudyPlanService:
                 start_date=datetime.utcnow(),
                 end_date=exam_date if exam_date else (datetime.utcnow() + timedelta(days=90)),
                 daily_duration_minutes=daily_duration,
-                priority=priority,
+                priority=priority, # Use the passed priority
                 status=PlanStatus.ACTIVE,
                 study_strategy=study_strategy,
                 weekly_schedule_json=weekly_schedule  # Persist the weekly schedule
