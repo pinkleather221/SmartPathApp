@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 import aiofiles
 
 from config import settings
-from database import get_db, init_db, User
+from database import get_db, init_db, User, StudyPlan, PlanStatus
 
 # Configure logging
 logging.basicConfig(
@@ -39,9 +39,19 @@ from models import (
     LearningInsightResponse, AcademicFeedback,
     MessageResponse, ErrorResponse, PaginatedResponse,
     InviteCodeResponse, InviteCodeRedeem, LinkedStudentResponse, LinkedGuardianResponse,
-    StudentDashboardResponse, GuardianInsightCreate
+    StudentDashboardResponse, GuardianInsightCreate, PriorityLevel
 )
 from pydantic import BaseModel
+
+def _convert_priority_to_int(priority: PriorityLevel) -> int:
+    """Converts PriorityLevel enum to an integer for database storage."""
+    if priority == PriorityLevel.LOW:
+        return 1
+    elif priority == PriorityLevel.MEDIUM:
+        return 5
+    elif priority == PriorityLevel.HIGH:
+        return 8
+    return 5  # Default to medium if somehow unexpected
 
 from auth import (
     authenticate_user, get_current_active_user, create_access_token,
@@ -745,7 +755,8 @@ async def generate_study_plan(
             subjects=request.subjects,
             available_hours=request.available_hours_per_day,
             exam_date=request.exam_date,
-            focus_areas=request.focus_areas
+            focus_areas=request.focus_areas,
+            priority=_convert_priority_to_int(request.priority) if request.priority else 5 # Convert string priority to int
         )
         
         # Log response details for debugging
@@ -773,6 +784,21 @@ async def generate_study_plan(
         )
 
 
+
+@app.get(f"{settings.API_V1_PREFIX}/study-plans/all", response_model=List[StudyPlanResponse])
+async def get_all_study_plans(
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Get all study plans for the current user, regardless of status."""
+    from database import StudyPlan
+    
+    plans = db.query(StudyPlan).filter(
+        StudyPlan.user_id == current_user.user_id
+    ).all()
+    
+    return [StudyPlanResponse.model_validate(plan) for plan in plans]
+
 @app.get(f"{settings.API_V1_PREFIX}/study-plans/active", response_model=List[StudyPlanResponse])
 async def get_active_study_plans(
     current_user: User = Depends(get_current_active_user),
@@ -787,6 +813,7 @@ async def get_active_study_plans(
     ).all()
     
     return [StudyPlanResponse.model_validate(plan) for plan in plans]
+
 
 
 @app.put(f"{settings.API_V1_PREFIX}/study-plans/{{plan_id}}/update", response_model=StudyPlanResponse)
@@ -826,20 +853,25 @@ async def update_study_plan(
     
     if request.status is not None:
         plan.status = request.status
-        # Sync is_active with status
-        plan.is_active = (request.status == PlanStatus.ACTIVE)
-    
-    if request.is_active is not None:
+        # Sync is_active with status based on the *new* status
+        if request.status == PlanStatus.ACTIVE:
+            plan.is_active = True
+        else: # COMPLETED or PAUSED
+            plan.is_active = False
+    elif request.is_active is not None: # Only consider is_active if status wasn't provided directly
         plan.is_active = request.is_active
-        if not plan.is_active:
-            plan.status = PlanStatus.COMPLETED
-        else:
+        if plan.is_active:
             plan.status = PlanStatus.ACTIVE
+        else:
+            plan.status = PlanStatus.COMPLETED # Default to completed if not active and no specific status given
     
     if request.completed_topics is not None:
         # Update completed topics if provided
         if hasattr(plan, 'completed_topics'):
             plan.completed_topics = request.completed_topics
+
+    if request.priority is not None:
+        plan.priority = _convert_priority_to_int(request.priority) # Convert string priority to int
     
     db.commit()
     db.refresh(plan)

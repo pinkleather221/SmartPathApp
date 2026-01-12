@@ -36,6 +36,12 @@ class PlanStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
+class PriorityLevel(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
 class InsightType(str, Enum):
     FEEDBACK = "feedback"
     TIP = "tip"
@@ -301,6 +307,7 @@ class StudyPlanGenerate(BaseModel):
     available_hours_per_day: float = Field(..., ge=1, le=12)
     exam_date: Optional[datetime] = None
     focus_areas: Optional[Dict[str, List[str]]] = None  # subject -> topics
+    priority: Optional[PriorityLevel] = PriorityLevel.MEDIUM
 
 
 class StudyPlanUpdate(BaseModel):
@@ -311,6 +318,7 @@ class StudyPlanUpdate(BaseModel):
     available_hours_per_day: Optional[float] = Field(None, ge=0.5, le=12)
     is_active: Optional[bool] = None
     status: Optional[PlanStatus] = None
+    priority: Optional[PriorityLevel] = None
     completed_topics: Optional[List[str]] = None
 
 

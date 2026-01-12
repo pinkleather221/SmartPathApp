@@ -32,6 +32,7 @@ const EditStudyPlanDialog = ({ isOpen, onClose, plan, onSave }: EditStudyPlanDia
     const [strategy, setStrategy] = useState("");
     const [availableHours, setAvailableHours] = useState(2);
     const [status, setStatus] = useState("active");
+    const [priority, setPriority] = useState("medium"); // New state for priority
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
@@ -57,6 +58,19 @@ const EditStudyPlanDialog = ({ isOpen, onClose, plan, onSave }: EditStudyPlanDia
             } else {
                 setStatus("active");
             }
+
+            // Init priority
+            if (plan.priority !== undefined && plan.priority !== null) {
+                if (plan.priority >= 8) {
+                    setPriority("high");
+                } else if (plan.priority >= 4) {
+                    setPriority("medium");
+                } else {
+                    setPriority("low");
+                }
+            } else {
+                setPriority("medium");
+            }
         }
     }, [plan, isOpen]);
 
@@ -71,7 +85,8 @@ const EditStudyPlanDialog = ({ isOpen, onClose, plan, onSave }: EditStudyPlanDia
                 study_strategy: strategy,
                 available_hours_per_day: availableHours,
                 status: status,
-                is_active: status === "active" || status === "in progress"
+                is_active: status === "active" || status === "in progress",
+                priority: priority
             });
 
             toast({
@@ -137,6 +152,22 @@ const EditStudyPlanDialog = ({ isOpen, onClose, plan, onSave }: EditStudyPlanDia
                             max={12}
                             step={0.5}
                         />
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium">Priority</label>
+                        <Select
+                            value={priority}
+                            onValueChange={setPriority}
+                        >
+                            <SelectTrigger>
+                                <SelectValue placeholder="Select priority" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="low">Low</SelectItem>
+                                <SelectItem value="medium">Medium</SelectItem>
+                                <SelectItem value="high">High</SelectItem>
+                            </SelectContent>
+                        </Select>
                     </div>
                     <div className="space-y-2">
                         <label className="text-sm font-medium">Status</label>

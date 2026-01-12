@@ -33,6 +33,7 @@ const GenerateStudyPlan = () => {
   const [hoursPerDay, setHoursPerDay] = useState([2]);
   const [examDate, setExamDate] = useState<Date>();
   const [focusAreas, setFocusAreas] = useState<Record<string, string>>({});
+  const [priority, setPriority] = useState("medium"); // New state for priority
   const [isGenerating, setIsGenerating] = useState(false);
   const [previewPlan, setPreviewPlan] = useState<{
     plan_id: number;
@@ -102,6 +103,7 @@ const GenerateStudyPlan = () => {
           available_hours_per_day: hoursPerDay[0],
           exam_date: examDate!.toISOString(),
           focus_areas: Object.keys(focusAreasDict).length > 0 ? focusAreasDict : undefined,
+          priority: priority,
         }),
         new Promise((_, reject) =>
           setTimeout(() => reject(new Error("Request timeout. Please try again.")), 120000)
@@ -306,20 +308,39 @@ const GenerateStudyPlan = () => {
                     <Clock className="w-4 h-4" />
                     Available Hours Per Day: {hoursPerDay[0]} hours
                   </label>
-                  <Slider
-                    value={hoursPerDay}
-                    onValueChange={setHoursPerDay}
-                    min={0.5}
-                    max={8}
-                    step={0.5}
-                    className="w-full"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Recommended: 2-4 hours per day for effective learning
-                  </p>
-                </div>
+                    <Slider
+                      value={hoursPerDay}
+                      onValueChange={setHoursPerDay}
+                      min={0.5}
+                      max={8}
+                      step={0.5}
+                      className="w-full"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Recommended: 2-4 hours per day for effective learning
+                    </p>
+                  </div>
 
-                <Separator />
+                  <Separator />
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Priority</label>
+                    <Select
+                      value={priority}
+                      onValueChange={setPriority}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select priority" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="low">Low</SelectItem>
+                        <SelectItem value="medium">Medium</SelectItem>
+                        <SelectItem value="high">High</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <Separator />
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium flex items-center gap-2">

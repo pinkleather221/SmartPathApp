@@ -85,6 +85,17 @@ const StudyPlanDetail = () => {
     }
   };
 
+  const getPriorityLabel = (priority: string | number | null | undefined) => {
+    if (typeof priority === "number") {
+      if (priority >= 8) return "High";
+      if (priority >= 4) return "Medium";
+      return "Low";
+    } else if (typeof priority === "string") {
+      return priority.charAt(0).toUpperCase() + priority.slice(1);
+    }
+    return "Medium";
+  };
+
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
       case "active":
@@ -208,8 +219,8 @@ const StudyPlanDetail = () => {
                 </Link>
                 <div>
                   <div className="flex items-center gap-2 mb-2">
-                    <Badge className={getPriorityColor(String(plan.priority || "medium"))}>
-                      {String(plan.priority || "Medium")} Priority
+                    <Badge className={getPriorityColor(getPriorityLabel(plan.priority))}>
+                      {getPriorityLabel(plan.priority)} Priority
                     </Badge>
                     <Badge className={getStatusColor(getStatusLabel(plan))} variant="outline">
                       {getStatusLabel(plan)}
