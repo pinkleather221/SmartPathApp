@@ -628,7 +628,10 @@ class StudyPlanService:
                     llm_focus = str(focus_areas_from_llm[subject] or "").strip()
                     if llm_focus and llm_focus != f"Core concepts and fundamentals of {subject}":
                         # LLM provided specific focus areas, use them but ensure user topics are mentioned
-                        focus_area = f"{llm_focus} (Emphasizing: {topics})"
+                        if subject.lower() == "kiswahili":
+                            focus_area = f"{llm_focus} (Mkazo: {topics})"
+                        else:
+                            focus_area = f"{llm_focus} (Emphasizing: {topics})"
                         logger.info(f"Using LLM-generated focus area for {subject} with user topics: {focus_area[:100]}")
                     else:
                         focus_area = f"Focus on: {topics}"

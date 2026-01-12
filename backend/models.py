@@ -305,7 +305,12 @@ class StudyPlanGenerate(BaseModel):
 
 class StudyPlanUpdate(BaseModel):
     """Study plan update request model."""
+    subject: Optional[str] = Field(None, min_length=1, max_length=100)
+    focus_area: Optional[str] = None
+    study_strategy: Optional[str] = None
+    available_hours_per_day: Optional[float] = Field(None, ge=0.5, le=12)
     is_active: Optional[bool] = None
+    status: Optional[PlanStatus] = None
     completed_topics: Optional[List[str]] = None
 
 

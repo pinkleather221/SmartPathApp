@@ -125,7 +125,7 @@ class ApiClient {
       }
 
       console.log(`[API] GET ${url}`); // Debug log
-      
+
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
@@ -395,7 +395,7 @@ export const reportsApi = {
   },
 
   analyze: (reportId: number) => apiClient.post(`/reports/analyze?report_id=${reportId}`, {}),
-  
+
   delete: (reportId: number) => apiClient.delete(`/reports/${reportId}`),
 };
 
@@ -452,7 +452,15 @@ export const studyPlansApi = {
     });
   },
 
-  update: (planId: number, data: { is_active?: boolean; completed_topics?: string[] }) =>
+  update: (planId: number, data: {
+    subject?: string;
+    focus_area?: string;
+    study_strategy?: string;
+    available_hours_per_day?: number;
+    is_active?: boolean;
+    status?: string;
+    completed_topics?: string[]
+  }) =>
     apiClient.put(`/study-plans/${planId}/update`, data),
 
   delete: (planId: number) => apiClient.delete(`/study-plans/${planId}`),
@@ -520,9 +528,9 @@ export interface StudentDashboard {
 export const inviteApi = {
   generateCode: () => apiClient.post<InviteCode>("/invite/generate"),
   getMyCodes: () => apiClient.get<InviteCode[]>("/invite/my-codes"),
-  redeemCode: (code: string) => 
+  redeemCode: (code: string) =>
     apiClient.post<{ message: string; success: boolean; data?: { relationship_id: number } }>(
-      "/invite/redeem", 
+      "/invite/redeem",
       { code }
     ),
 };
@@ -530,14 +538,14 @@ export const inviteApi = {
 export const relationshipsApi = {
   getLinkedStudents: () => apiClient.get<LinkedStudent[]>("/relationships/students"),
   getLinkedGuardians: () => apiClient.get<LinkedGuardian[]>("/relationships/guardians"),
-  getStudentDashboard: (studentId: number) => 
+  getStudentDashboard: (studentId: number) =>
     apiClient.get<StudentDashboard>(`/students/${studentId}/dashboard`),
   getStudentReports: (studentId: number, limit?: number) =>
     apiClient.get(`/students/${studentId}/reports`, limit ? { limit } : undefined),
   getStudentFlashcards: (studentId: number, subject?: string, limit?: number) =>
-    apiClient.get(`/students/${studentId}/flashcards`, { 
-      ...(subject && { subject }), 
-      ...(limit && { limit }) 
+    apiClient.get(`/students/${studentId}/flashcards`, {
+      ...(subject && { subject }),
+      ...(limit && { limit })
     }),
   getStudentCareer: (studentId: number) =>
     apiClient.get(`/students/${studentId}/career`),
@@ -548,7 +556,7 @@ export const relationshipsApi = {
     title: string;
     content: string;
   }) => apiClient.post(`/students/${studentId}/insights`, { ...data, student_id: studentId }),
-  removeStudentLink: (studentId: number) => 
+  removeStudentLink: (studentId: number) =>
     apiClient.delete(`/relationships/${studentId}`),
 };
 

@@ -716,6 +716,7 @@ CRITICAL REQUIREMENTS:
 5. Allocate more time to weaker subjects
 6. Distribute study time across the week for balanced learning
 7. Ensure each subject gets adequate time based on priority
+8. For the subject "Kiswahili", the ENTIRE content in the "focus_areas" field MUST be written in the Swahili language. This includes the explanations and descriptions. Do not mix English. Example: Instead of "Alphabet recognition", use "Kutambua herufi". Instead of "comprehension", use "Ufahamu". Ensure the whole sentence is in Swahili.
 
 Example Response Format:
 If Mathematics with focus on "Calculus, Derivatives" is requested:

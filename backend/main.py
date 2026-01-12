@@ -780,13 +780,12 @@ async def get_active_study_plans(
 ):
     """Get active study plans."""
     from database import StudyPlan, PlanStatus
-    from sqlalchemy.orm import joinedload
-
-    plans = db.query(StudyPlan).options(joinedload(StudyPlan.sessions)).filter(
+    
+    plans = db.query(StudyPlan).filter(
         StudyPlan.user_id == current_user.user_id,
         StudyPlan.status == PlanStatus.ACTIVE
     ).all()
-
+    
     return [StudyPlanResponse.model_validate(plan) for plan in plans]
 
 
@@ -812,6 +811,24 @@ async def update_study_plan(
         )
     
     # Update fields from request
+    if request.subject is not None:
+        plan.subject = request.subject
+    
+    if request.focus_area is not None:
+        plan.focus_area = request.focus_area
+    
+    if request.study_strategy is not None:
+        plan.study_strategy = request.study_strategy
+    
+    if request.available_hours_per_day is not None:
+        # Update daily duration in minutes
+        plan.daily_duration_minutes = int(request.available_hours_per_day * 60)
+    
+    if request.status is not None:
+        plan.status = request.status
+        # Sync is_active with status
+        plan.is_active = (request.status == PlanStatus.ACTIVE)
+    
     if request.is_active is not None:
         plan.is_active = request.is_active
         if not plan.is_active:
@@ -864,9 +881,8 @@ async def log_study_session(
     db: Session = Depends(get_db)
 ):
     """Log a study session."""
-    from database import StudySession, StudyPlan
-    from sqlalchemy.orm import joinedload
-
+    from database import StudySession
+    
     session = StudySession(
         user_id=current_user.user_id,
         plan_id=plan_id if plan_id > 0 else None,
@@ -876,39 +892,32 @@ async def log_study_session(
         notes=session_data.notes,
         topics_covered=session_data.topics_covered
     )
-
+    
     db.add(session)
     db.commit()
     db.refresh(session)
 
-    # Update the study plan's progress percentage
+    # Check for auto-completion
     if plan_id > 0:
-        plan = db.query(StudyPlan).options(joinedload(StudyPlan.sessions)).filter(
-            StudyPlan.plan_id == plan_id,
-            StudyPlan.user_id == current_user.user_id
-        ).first()
-
+        from database import StudyPlan, PlanStatus
+        plan = db.query(StudyPlan).filter(StudyPlan.plan_id == plan_id).first()
+        
         if plan:
-            # Calculate total actual hours from all sessions
-            actual_hours = sum(s.duration_minutes for s in plan.sessions) / 60
-
-            # Calculate total planned hours
+            # Calculate progress
+            total_minutes = 0
+            for s in plan.sessions:
+                total_minutes += s.duration_minutes
+            
+            # Calculate planned minutes
             if plan.start_date and plan.end_date and plan.daily_duration_minutes:
-                days_diff = (plan.end_date - plan.start_date).days + 1  # Include both start and end dates
-                planned_hours = (days_diff * plan.daily_duration_minutes) / 60
-
-                # Calculate progress percentage
-                if planned_hours > 0:
-                    progress_percentage = min(100.0, (actual_hours / planned_hours) * 100)
-                else:
-                    progress_percentage = 0.0
-            else:
-                progress_percentage = 0.0
-
-            # Update the progress percentage in the database
-            plan.progress_percentage = progress_percentage
-            db.commit()
-
+                days = (plan.end_date - plan.start_date).days + 1
+                planned_minutes = days * plan.daily_duration_minutes
+                
+                if planned_minutes > 0 and total_minutes >= planned_minutes:
+                    plan.status = PlanStatus.COMPLETED
+                    plan.is_active = False
+                    db.commit()
+    
     return StudySessionResponse.model_validate(session)
 
 

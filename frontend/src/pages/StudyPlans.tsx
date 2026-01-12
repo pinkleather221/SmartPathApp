@@ -8,11 +8,25 @@ import { Progress } from "@/components/ui/progress";
 import { Plus, Eye, Calendar, Clock, Target, Loader2, Trash2, Edit } from "lucide-react";
 import { studyPlansApi } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import EditStudyPlanDialog from "@/components/study-plans/EditStudyPlanDialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const StudyPlans = () => {
   const { toast } = useToast();
   const [plans, setPlans] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [editPlanOpen, setEditPlanOpen] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<any | null>(null);
+  const [planToDelete, setPlanToDelete] = useState<any | null>(null);
 
   useEffect(() => {
     loadPlans();
@@ -34,8 +48,8 @@ const StudyPlans = () => {
     }
   };
 
-  const activePlans = useMemo(() => plans.filter((p: any) => p.is_active !== false), [plans]);
-  const completedPlans = useMemo(() => plans.filter((p: any) => p.is_active === false), [plans]);
+  const activePlans = useMemo(() => plans.filter((p: any) => p.status === "active"), [plans]);
+  const completedPlans = useMemo(() => plans.filter((p: any) => p.status === "completed"), [plans]);
 
   // Total study hours across all plans based on logged sessions, fallback to planned hours
   const totalStudyHours = useMemo(() => {
@@ -197,7 +211,7 @@ const StudyPlans = () => {
                         </div>
                         <Progress value={Math.round(plan.progress_percentage)} />
                       </div>
-                      
+
 
                       <div className="grid grid-cols-2 gap-3 text-sm">
                         <div className="flex items-center gap-2">
@@ -212,67 +226,36 @@ const StudyPlans = () => {
                         )}
                       </div>
 
-                            <div className="flex items-center justify-between gap-2">
-                              <Badge className={getStatusColor(plan.is_active ? "In Progress" : "Completed")} variant="outline">
-                                {plan.is_active ? "In Progress" : "Completed"}
-                              </Badge>
-                              <div className="flex gap-1">
-                                <Link to={`/study-plans/${plan.plan_id}`}>
-                                  <Button variant="ghost" size="sm">
-                                    <Eye className="w-4 h-4 mr-2" />
-                                    View
-                                  </Button>
-                                </Link>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={async () => {
-                                    try {
-                                      await studyPlansApi.update(plan.plan_id, {
-                                        is_active: !plan.is_active,
-                                      });
-                                      toast({
-                                        title: "Plan updated",
-                                        description: `Study plan marked as ${plan.is_active ? "completed" : "active"}.`,
-                                      });
-                                      loadPlans();
-                                    } catch (error) {
-                                      toast({
-                                        title: "Error updating plan",
-                                        description: error instanceof Error ? error.message : "Failed to update study plan",
-                                        variant: "destructive",
-                                      });
-                                    }
-                                  }}
-                                >
-                                  <Edit className="w-4 h-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={async () => {
-                                    if (window.confirm("Are you sure you want to delete this study plan?")) {
-                                      try {
-                                        await studyPlansApi.delete(plan.plan_id);
-                                        toast({
-                                          title: "Study plan deleted",
-                                          description: "The study plan has been deleted successfully.",
-                                        });
-                                        loadPlans();
-                                      } catch (error) {
-                                        toast({
-                                          title: "Error deleting plan",
-                                          description: error instanceof Error ? error.message : "Failed to delete study plan",
-                                          variant: "destructive",
-                                        });
-                                      }
-                                    }
-                                  }}
-                                >
-                                  <Trash2 className="w-4 h-4 text-destructive" />
-                                </Button>
-                              </div>
-                            </div>
+                      <div className="flex items-center justify-between min-w-fit flex-wrap gap-2">
+                        <Badge className={getStatusColor(plan.status === "active" ? "In Progress" : "Completed")} variant="outline">
+                          {plan.status === "active" ? "In Progress" : "Completed"}
+                        </Badge>
+                        <div className="flex gap-1">
+                          <Link to={`/study-plans/${plan.plan_id}`}>
+                            <Button variant="ghost" size="sm">
+                              <Eye className="w-4 h-4 mr-2" />
+                              View
+                            </Button>
+                          </Link>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={async () => {
+                              setSelectedPlan(plan);
+                              setEditPlanOpen(true);
+                            }}
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setPlanToDelete(plan)}
+                          >
+                            <Trash2 className="w-4 h-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </div>
                     </CardContent>
                   </Card>
                 );
@@ -308,7 +291,55 @@ const StudyPlans = () => {
           </div>
         )}
       </div>
-    </DashboardLayout>
+      <EditStudyPlanDialog
+        isOpen={editPlanOpen}
+        onClose={() => setEditPlanOpen(false)}
+        plan={selectedPlan}
+        onSave={() => {
+          loadPlans();
+          setEditPlanOpen(false);
+        }}
+      />
+
+      <AlertDialog open={!!planToDelete} onOpenChange={(open) => !open && setPlanToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the study plan
+              "{planToDelete?.subject}" and all associated data.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={async () => {
+                if (!planToDelete) return;
+                try {
+                  await studyPlansApi.delete(planToDelete.plan_id);
+                  toast({
+                    title: "Study plan deleted",
+                    description: "The study plan has been deleted successfully.",
+                  });
+                  loadPlans();
+                } catch (error) {
+                  toast({
+                    title: "Error deleting plan",
+                    description: error instanceof Error ? error.message : "Failed to delete study plan",
+                    variant: "destructive",
+                  });
+                } finally {
+                  setPlanToDelete(null);
+                }
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </DashboardLayout >
   );
 };
 
