@@ -333,8 +333,7 @@ class StudyPlanResponse(BaseModel):
     daily_duration_minutes: int
     priority: int
     status: PlanStatus
-    # Expose as 'strategy' to clients, map from DB field 'study_strategy'
-    strategy: str = Field(default="", alias="study_strategy", description="Study strategy for this subject")
+    strategy: str = Field(default="", description="Study strategy for this subject")
     # Expose as 'weekly_schedule' to clients, map from DB field 'weekly_schedule_json'
     weekly_schedule: List[Dict[str, Any]] = Field(default_factory=list, alias="weekly_schedule_json", description="Weekly study schedule")
     sessions: List["StudySessionResponse"] = Field(default_factory=list, description="Study sessions")
@@ -432,7 +431,7 @@ class StudyPlanResponse(BaseModel):
         validated_obj.progress_percentage = progress_percentage
 
         return validated_obj
-    
+
     model_config = {"from_attributes": True, "populate_by_name": True}
 
 

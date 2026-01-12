@@ -13,6 +13,22 @@ import { ArrowLeft, Calendar, Clock, Target, Edit, Plus, Check } from "lucide-re
 import { useToast } from "@/hooks/use-toast";
 import { studyPlansApi } from "@/lib/api";
 import EditStudyPlanDialog from "@/components/study-plans/EditStudyPlanDialog";
+import ReactMarkdown from "react-markdown";
+
+// Simple function to convert AI-generated text to better markdown
+const formatStrategyText = (text: string): string => {
+  return text
+    // Convert numbered sections like "1. **Day 1:**" to proper headings
+    .replace(/^(\d+)\.\s*\*\*(.*?):\*\*/gm, '### $1. $2')
+    // Convert standalone numbered items to proper list items
+    .replace(/^(\d+)\.\s/gm, '$1. ')
+    // Ensure proper spacing between sections
+    .replace(/(\d+\.\s.*?:)/g, '\n\n$1')
+    // Clean up multiple consecutive line breaks
+    .replace(/\n{3,}/g, '\n\n')
+    // Ensure we start with content, not empty lines
+    .trim();
+};
 
 type WeeklyDay = {
   day_of_week?: string;
@@ -286,8 +302,39 @@ const StudyPlanDetail = () => {
                       Study Strategy
                     </CardTitle>
                   </CardHeader>
-                  <CardContent>
-                    <p className="text-foreground leading-relaxed">{plan.strategy || "Focus on active recall and spaced repetition."}</p>
+                  <CardContent className="space-y-4">
+                    <div className="prose prose-sm max-w-none dark:prose-invert">
+                      {plan.strategy && plan.strategy.trim() !== "" ? (
+                        <ReactMarkdown
+                          components={{
+                            p: ({ children }) => (
+                              <p className="text-foreground leading-relaxed mb-3 last:mb-0">{children}</p>
+                            ),
+                            strong: ({ children }) => (
+                              <strong className="font-semibold text-primary">{children}</strong>
+                            ),
+                            ol: ({ children }) => (
+                              <ol className="list-decimal list-inside space-y-3 mb-4 ml-4">{children}</ol>
+                            ),
+                            li: ({ children }) => (
+                              <li className="text-foreground leading-relaxed">{children}</li>
+                            ),
+                            h3: ({ children }) => (
+                              <h3 className="text-lg font-bold text-primary mb-3 mt-6 first:mt-0 border-b border-primary/20 pb-1">{children}</h3>
+                            ),
+                            h4: ({ children }) => (
+                              <h4 className="text-base font-semibold text-foreground mb-2 mt-4">{children}</h4>
+                            ),
+                          }}
+                        >
+                          {formatStrategyText(plan.strategy)}
+                        </ReactMarkdown>
+                      ) : (
+                        <p className="text-foreground leading-relaxed">
+                          Focus on active recall and spaced repetition.
+                        </p>
+                      )}
+                    </div>
                   </CardContent>
                 </Card>
 

@@ -447,11 +447,7 @@ export const studyPlansApi = {
   getAll: () => apiClient.get("/study-plans/all"),
 
   getById: (planId: number) => {
-    // Get active plans and filter by ID
-    return apiClient.get("/study-plans/all").then((plans: unknown[]) => {
-      const plansArray = plans as Array<{ plan_id: number }>;
-      return plansArray.find((p) => p.plan_id === planId);
-    });
+    return apiClient.get(`/study-plans/${planId}`);
   },
 
   update: (planId: number, data: {

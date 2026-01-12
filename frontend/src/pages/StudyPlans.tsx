@@ -94,10 +94,10 @@ const getDaysRemaining = (endDate: string) => {
 const StudyPlanCard = ({ plan, onEdit, onDelete }: StudyPlanCardProps) => (
   <Card key={plan.plan_id} className={`hover:shadow-lg transition-shadow ${plan.status === "completed" ? "opacity-75" : ""}`}>
     <CardHeader>
-      <div className="flex items-start justify-between mb-2">
+      <div className="flex items-start justify-between mb-0">
         <div>
           <CardTitle className="text-lg">{plan.subject || plan.subjects?.[0] || "Study Plan"}</CardTitle>
-          <CardDescription className="mt-1">{plan.focus_area || plan.description || ""}</CardDescription>
+          <CardDescription className="mt-1 max-h-[90px] overflow-hidden text-ellipsis line-clamp-3 ">{plan.focus_area || plan.description || ""}</CardDescription>
         </div>
         {plan.priority !== undefined && plan.priority !== null && (
           <Badge className={getPriorityColor(plan.priority)}>

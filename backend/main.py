@@ -807,13 +807,31 @@ async def get_active_study_plans(
 ):
     """Get active study plans."""
     from database import StudyPlan, PlanStatus
-    
+
     plans = db.query(StudyPlan).filter(
         StudyPlan.user_id == current_user.user_id,
         StudyPlan.status == PlanStatus.ACTIVE
     ).all()
-    
+
     return [StudyPlanResponse.model_validate(plan) for plan in plans]
+
+
+@app.get(f"{settings.API_V1_PREFIX}/study-plans/{{plan_id}}", response_model=StudyPlanResponse)
+async def get_study_plan_by_id(
+    plan_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Get a specific study plan by ID."""
+    plan = db.query(StudyPlan).filter(StudyPlan.plan_id == plan_id).first()
+    if not plan:
+        raise HTTPException(status_code=404, detail="Study plan not found")
+
+    # Check if the plan belongs to the current user
+    if plan.user_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="You don't have permission to access this study plan")
+
+    return StudyPlanService.get_plan_by_id(db, plan_id)
 
 
 

@@ -761,9 +761,9 @@ If Mathematics with focus on "Calculus, Derivatives" is requested:
             has_weekly_schedule = bool(parsed_response.get("weekly_schedule"))
             has_focus_areas = bool(parsed_response.get("focus_areas"))
             has_strategies = bool(parsed_response.get("strategies"))
-            
+
             logger.info(f"LLM response validation - weekly_schedule: {has_weekly_schedule}, focus_areas: {has_focus_areas}, strategies: {has_strategies}")
-            
+
             # If we have focus_areas from user, ensure LLM addressed them
             if focus_areas and has_focus_areas:
                 for subject, topics in focus_areas.items():
@@ -772,7 +772,7 @@ If Mathematics with focus on "Calculus, Derivatives" is requested:
                         logger.info(f"LLM generated focus_areas for {subject}: {llm_focus[:100]}")
                     else:
                         logger.warning(f"LLM did not generate focus_areas for {subject} with requested topics: {topics}")
-            
+
             return parsed_response
             
         except json.JSONDecodeError as e:

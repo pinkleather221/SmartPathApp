@@ -742,7 +742,10 @@ class StudyPlanService:
             "weekly_schedule": weekly_schedule,
             "sessions": session_responses
         }
-        
+
+        # Explicitly ensure strategy field is set
+        response_data["strategy"] = plan.study_strategy
+
         return StudyPlanResponse.model_validate(response_data)
 
 
