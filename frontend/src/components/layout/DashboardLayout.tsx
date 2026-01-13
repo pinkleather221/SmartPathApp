@@ -30,6 +30,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { ModeToggle } from "@/components/mode-toggle";
 
 // Navigation items by user type
 const studentNavigation = [
@@ -84,10 +85,10 @@ const Sidebar = ({ userType }: { userType?: string }) => {
           <span className="text-xl font-bold text-foreground">SmartPath</span>
         </Link>
       </div>
-      
+
       <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
         {navigation.map((item) => {
-          const isActive = location.pathname === item.href || 
+          const isActive = location.pathname === item.href ||
             (item.href !== "/settings" && location.pathname.startsWith(item.href));
           return (
             <Link
@@ -124,7 +125,7 @@ const getInitials = (name: string): string => {
 
 const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const navigate = useNavigate();
-  
+
   // Fetch current user data
   const { data: user, isLoading } = useQuery({
     queryKey: ["currentUser"],
@@ -175,33 +176,37 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
 
           <div className="flex-1" />
 
-          {/* User Menu */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="relative h-10 w-10 rounded-full">
-                <Avatar>
-                  <AvatarFallback className="bg-primary text-primary-foreground">
-                    {isLoading ? "..." : userInitials}
-                  </AvatarFallback>
-                </Avatar>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-56" align="end">
-              <DropdownMenuLabel>
-                <div className="flex flex-col space-y-1">
-                  <p className="text-sm font-medium">{userName}</p>
-                  <p className="text-xs text-muted-foreground">{userEmail}</p>
-                </div>
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem asChild>
-                <Link to="/settings">Settings</Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleLogout}>
-                Sign out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {/* Theme Toggle & User Menu */}
+          <div className="flex items-center gap-2">
+            <ModeToggle />
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="relative h-10 w-10 rounded-full">
+                  <Avatar>
+                    <AvatarFallback className="bg-primary text-primary-foreground">
+                      {isLoading ? "..." : userInitials}
+                    </AvatarFallback>
+                  </Avatar>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-56" align="end">
+                <DropdownMenuLabel>
+                  <div className="flex flex-col space-y-1">
+                    <p className="text-sm font-medium">{userName}</p>
+                    <p className="text-xs text-muted-foreground">{userEmail}</p>
+                  </div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link to="/settings">Settings</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleLogout}>
+                  Sign out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </header>
 
         {/* Page Content */}
