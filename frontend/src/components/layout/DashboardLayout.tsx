@@ -29,7 +29,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { getImageUrl } from "@/lib/api";
 import { ModeToggle } from "@/components/mode-toggle";
 
 // Navigation items by user type
@@ -45,13 +46,13 @@ const studentNavigation = [
 ];
 
 const teacherNavigation = [
-  { name: "Dashboard", href: "/teacher/dashboard", icon: LayoutDashboard },
+  // { name: "Dashboard", href: "/teacher/dashboard", icon: LayoutDashboard },
   { name: "My Students", href: "/teacher/dashboard", icon: GraduationCap },
   { name: "Settings", href: "/settings", icon: Settings },
 ];
 
 const parentNavigation = [
-  { name: "Dashboard", href: "/parent/dashboard", icon: LayoutDashboard },
+  // { name: "Dashboard", href: "/parent/dashboard", icon: LayoutDashboard },
   { name: "My Child", href: "/parent/dashboard", icon: GraduationCap },
   { name: "Settings", href: "/settings", icon: Settings },
 ];
@@ -184,6 +185,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="relative h-10 w-10 rounded-full">
                   <Avatar>
+                    <AvatarImage src={getImageUrl(user?.profile_picture)} alt={userName} />
                     <AvatarFallback className="bg-primary text-primary-foreground">
                       {isLoading ? "..." : userInitials}
                     </AvatarFallback>

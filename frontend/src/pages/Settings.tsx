@@ -15,6 +15,8 @@ import { Badge } from "@/components/ui/badge";
 import { User, Bell, Lock, Trash2, Loader2, Link, Copy, Check, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { authApi, inviteApi, relationshipsApi, InviteCode, LinkedStudent, LinkedGuardian } from "@/lib/api";
+import { ConnectionManagement } from "@/components/connections/ConnectionManagement";
+import { AvatarUpload } from "@/components/profile/AvatarUpload";
 
 // Connections Section Component
 const ConnectionsSection = ({ userType }: { userType?: string }) => {
@@ -167,50 +169,11 @@ const ConnectionsSection = ({ userType }: { userType?: string }) => {
           </CardContent>
         </Card>
 
-        {/* Linked Students */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="w-5 h-5" />
-              Linked {userType === "teacher" ? "Students" : "Children"}
-            </CardTitle>
-            <CardDescription>
-              {userType === "teacher" ? "Students" : "Children"} connected to your account
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {loadingStudents ? (
-              <p className="text-muted-foreground">Loading...</p>
-            ) : linkedStudents && linkedStudents.length > 0 ? (
-              <div className="space-y-3">
-                {linkedStudents.map((student: LinkedStudent) => (
-                  <div 
-                    key={student.user_id}
-                    className="flex items-center justify-between p-3 rounded-lg border"
-                  >
-                    <div>
-                      <p className="font-medium">{student.full_name}</p>
-                      <p className="text-sm text-muted-foreground">{student.email}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {student.grade_level && (
-                        <Badge variant="outline">Grade {student.grade_level}</Badge>
-                      )}
-                      <Badge variant="secondary">
-                        Linked {new Date(student.linked_at).toLocaleDateString()}
-                      </Badge>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-muted-foreground text-center py-8">
-                No {userType === "teacher" ? "students" : "children"} linked yet. 
-                Share your invite code to get started.
-              </p>
-            )}
-          </CardContent>
-        </Card>
+        {/* Connection Management */}
+        <ConnectionManagement
+          students={linkedStudents || []}
+          userType={userType as "parent" | "teacher"}
+        />
       </>
     );
   }
@@ -446,6 +409,17 @@ const Settings = () => {
 
           {/* Profile Tab */}
           <TabsContent value="profile" className="space-y-6">
+            {/* Profile Picture Upload */}
+            <AvatarUpload
+              currentAvatar={user?.profile_picture}
+              userName={user?.full_name || ""}
+              userInitials={user?.full_name?.split(' ').map(n => n[0]).join('').toUpperCase() || "U"}
+              onAvatarUpdate={() => {
+                // Invalidate user data to refetch with new profile picture
+                queryClient.invalidateQueries({ queryKey: ["currentUser"] });
+              }}
+            />
+
             <Card>
               <CardHeader>
                 <CardTitle>Personal Information</CardTitle>

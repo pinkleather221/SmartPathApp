@@ -95,6 +95,7 @@ class UserProfile(BaseModel):
     curriculum_type: CurriculumType
     phone_number: Optional[str]
     school_name: Optional[str]
+    profile_picture: Optional[str]
     created_at: datetime
     
     model_config = {"from_attributes": True}
@@ -105,6 +106,7 @@ class UserProfileUpdate(BaseModel):
     full_name: Optional[str] = Field(None, min_length=2, max_length=255)
     phone_number: Optional[str] = None
     school_name: Optional[str] = None
+    profile_picture: Optional[str] = None
     grade_level: Optional[int] = Field(None, ge=3, le=12)
     curriculum_type: Optional[CurriculumType] = None
 
@@ -165,6 +167,7 @@ class PerformanceDashboard(BaseModel):
     """Performance dashboard response model."""
     overall_gpa: float
     total_subjects: int
+    subject_performance: List[SubjectPerformanceResponse]
     strong_subjects: List[SubjectPerformanceResponse]
     weak_subjects: List[SubjectPerformanceResponse]
     improving_subjects: List[str]
@@ -549,6 +552,7 @@ class LinkedStudentResponse(BaseModel):
     email: str
     grade_level: Optional[int]
     school_name: Optional[str]
+    profile_picture: Optional[str]
     relationship_type: str
     linked_at: datetime
 
@@ -558,6 +562,7 @@ class LinkedGuardianResponse(BaseModel):
     user_id: int
     full_name: str
     email: str
+    profile_picture: Optional[str]
     user_type: UserType
     relationship_type: str
     linked_at: datetime

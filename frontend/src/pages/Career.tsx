@@ -153,7 +153,7 @@ const Career = () => {
                   )}
 
                   <Link to={`/career/${rec.recommendation_id || rec.career_id}`}>
-                    <Button variant="outline" className="w-full" size="sm">
+                    <Button variant="outline" className="w-full mt-4" size="sm">
                       View Details
                       <ArrowRight className="w-4 h-4 ml-2" />
                     </Button>

@@ -137,7 +137,7 @@ class ReportService:
         
         grades = report.grades_json
         strong_subjects = identify_strong_subjects(grades, "B+")
-        weak_subjects = identify_weak_subjects(grades, "C")
+        weak_subjects = identify_weak_subjects(grades, "B")  # Changed from "C" to "B" to catch more subjects
         
         # Get previous report for trend
         prev_report = db.query(AcademicReport).filter(
@@ -157,6 +157,10 @@ class ReportService:
                     trend_analysis[subject] = "declining"
                 else:
                     trend_analysis[subject] = "stable"
+        else:
+            # For first report, mark all subjects as stable
+            for subject in grades.keys():
+                trend_analysis[subject] = "stable"
         
         # Generate AI-powered recommendations using Gemini
         try:
@@ -178,7 +182,7 @@ class ReportService:
             if not recommendations:
                 recommendations.append("Keep up the consistent study habits for continued success")
         
-        return ReportAnalysis(
+        result = ReportAnalysis(
             report_id=report_id,
             overall_gpa=report.overall_gpa or 0.0,
             subject_count=len(grades),
@@ -187,6 +191,8 @@ class ReportService:
             trend_analysis=trend_analysis,
             recommendations=recommendations
         )
+        print(f"DEBUG: Returning analysis with trend_analysis: {trend_analysis}")
+        return result
     
     @staticmethod
     def get_report_history(db: Session, user_id: int, limit: int = 10) -> List[AcademicReport]:
@@ -242,6 +248,7 @@ class PerformanceService:
         return PerformanceDashboard(
             overall_gpa=latest_report.overall_gpa or 0.0,
             total_subjects=len(latest_report.grades_json),
+            subject_performance=[SubjectPerformanceResponse.model_validate(sp) for sp in subject_perfs],
             strong_subjects=[SubjectPerformanceResponse.model_validate(sp) for sp in strong_subjects],
             weak_subjects=[SubjectPerformanceResponse.model_validate(sp) for sp in weak_subjects],
             improving_subjects=improving,
@@ -985,6 +992,7 @@ class RelationshipService:
                     email=student.email,
                     grade_level=student.grade_level,
                     school_name=student.school_name,
+                    profile_picture=student.profile_picture,
                     relationship_type=rel.relationship_type,
                     linked_at=rel.created_at
                 ))
@@ -1006,6 +1014,7 @@ class RelationshipService:
                     user_id=guardian.user_id,
                     full_name=guardian.full_name,
                     email=guardian.email,
+                    profile_picture=guardian.profile_picture,
                     user_type=guardian.user_type,
                     relationship_type=rel.relationship_type,
                     linked_at=rel.created_at

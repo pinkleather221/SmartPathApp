@@ -102,6 +102,7 @@ class User(Base):
     curriculum_type = Column(String(20), default="CBE")
     phone_number = Column(String(20), nullable=True)
     school_name = Column(String(255), nullable=True)
+    profile_picture = Column(String(500), nullable=True)  # URL/path to profile picture
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     is_active = Column(Boolean, default=True, nullable=False)
