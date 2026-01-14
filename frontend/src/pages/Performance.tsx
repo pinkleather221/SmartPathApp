@@ -5,14 +5,28 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { TrendingUp, TrendingDown, Minus, Target, BarChart3, LineChart, Loader2 } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus, Target, BarChart3, LineChart, Loader2, ArrowLeft } from "lucide-react";
 import { performanceApi } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts";
 
 const Performance = () => {
   const { toast } = useToast();
   const [dashboard, setDashboard] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [showComparison, setShowComparison] = useState(false);
+
+  const handleCompareClick = () => {
+    setShowComparison(true);
+    // Smooth scroll to comparison section after state update
+    setTimeout(() => {
+      const comparisonSection = document.getElementById('comparison-section');
+      if (comparisonSection) {
+        comparisonSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 100);
+  };
 
   useEffect(() => {
     loadDashboard();
@@ -22,6 +36,7 @@ const Performance = () => {
     try {
       setLoading(true);
       const data = await performanceApi.getDashboard();
+      console.log("Dashboard data:", data);
       setDashboard(data);
     } catch (error) {
       toast({
@@ -36,7 +51,8 @@ const Performance = () => {
 
   const overallGPA = dashboard?.overall_gpa || 0;
   const totalSubjects = dashboard?.total_subjects || 0;
-  const subjects = dashboard?.subject_performance || dashboard?.strong_subjects || [];
+  const subjects = dashboard?.subject_performance || [];
+  console.log("Subject data:", subjects);
   const trend = dashboard?.trend || "improving";
 
   const getGradeColor = (gpa: number) => {
@@ -46,11 +62,19 @@ const Performance = () => {
   };
 
   const getTrendIcon = (trend: string) => {
-    switch (trend) {
+    if (!trend) {
+      return <Minus className="w-4 h-4 text-muted-foreground" />;
+    }
+
+    switch (trend.toLowerCase()) {
+      case "improving":
       case "up":
         return <TrendingUp className="w-4 h-4 text-success" />;
+      case "declining":
       case "down":
         return <TrendingDown className="w-4 h-4 text-destructive" />;
+      case "stable":
+        return <Minus className="w-4 h-4 text-muted-foreground" />;
       default:
         return <Minus className="w-4 h-4 text-muted-foreground" />;
     }
@@ -137,7 +161,7 @@ const Performance = () => {
         <div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-2xl font-bold">Subject Performance</h2>
-            <Button variant="outline">
+            <Button variant="outline" onClick={handleCompareClick}>
               <BarChart3 className="w-4 h-4 mr-2" />
               Compare All
             </Button>
@@ -168,13 +192,13 @@ const Performance = () => {
                           Strength Score: {subject.strength_score.toFixed(2) || 0}/100
                         </CardDescription>
                       </div>
-                      {getTrendIcon("stable")}
+                      {getTrendIcon(subject.trend)}
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-muted-foreground">Grade</span>
-                      <Badge className={getGradeColor(subject.current_gpa || 0)}>
+                      <Badge className={getGradeColor(subject.grade_numeric || 0)}>
                         {subject.current_grade || "N/A"}
                       </Badge>
                     </div>
@@ -192,6 +216,172 @@ const Performance = () => {
             </div>
           )}
         </div>
+
+        {/* Comparison View */}
+        {showComparison && (
+          <div id="comparison-section" className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <Button variant="ghost" size="sm" onClick={() => setShowComparison(false)}>
+                  <ArrowLeft className="w-4 h-4 mr-2" />
+                  Back to Overview
+                </Button>
+                <h2 className="text-2xl font-bold">Subject Comparison</h2>
+              </div>
+            </div>
+
+            <div className="grid gap-6 md:grid-cols-2">
+              {/* GPA Comparison Chart */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>GPA Comparison</CardTitle>
+                  <CardDescription>
+                    Compare your GPA across all subjects
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ChartContainer
+                    config={{
+                      gpa: {
+                        label: "GPA",
+                        color: "hsl(var(--chart-1))",
+                      },
+                    }}
+                    className="h-[300px]"
+                  >
+                    <BarChart data={subjects}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis
+                        dataKey="subject"
+                        fontSize={12}
+                        tickLine={false}
+                        axisLine={false}
+                      />
+                      <YAxis
+                        domain={[0, 4]}
+                        fontSize={12}
+                        tickLine={false}
+                        axisLine={false}
+                      />
+                      <ChartTooltip
+                        content={<ChartTooltipContent />}
+                        formatter={(value: any) => [value ? value.toFixed(2) : "0.00", "GPA"]}
+                      />
+                      <Bar
+                        dataKey="grade_numeric"
+                        fill="var(--color-gpa)"
+                        radius={[4, 4, 0, 0]}
+                      />
+                    </BarChart>
+                  </ChartContainer>
+                </CardContent>
+              </Card>
+
+              {/* Strength Score Comparison Chart */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Strength Score Comparison</CardTitle>
+                  <CardDescription>
+                    Compare your performance strength across subjects
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ChartContainer
+                    config={{
+                      strength: {
+                        label: "Strength Score",
+                        color: "hsl(var(--chart-2))",
+                      },
+                    }}
+                    className="h-[300px]"
+                  >
+                    <BarChart data={subjects}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis
+                        dataKey="subject"
+                        fontSize={12}
+                        tickLine={false}
+                        axisLine={false}
+                      />
+                      <YAxis
+                        domain={[0, 100]}
+                        fontSize={12}
+                        tickLine={false}
+                        axisLine={false}
+                      />
+                      <ChartTooltip
+                        content={<ChartTooltipContent />}
+                        formatter={(value: any) => [value ? Math.round(value) : 0, "Strength Score"]}
+                      />
+                      <Bar
+                        dataKey="strength_score"
+                        fill="var(--color-strength)"
+                        radius={[4, 4, 0, 0]}
+                      />
+                    </BarChart>
+                  </ChartContainer>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Detailed Comparison Table */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Detailed Subject Comparison</CardTitle>
+                <CardDescription>
+                  Comprehensive view of all subject performance metrics
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left py-2 px-4 font-medium">Subject</th>
+                        <th className="text-center py-2 px-4 font-medium">Grade</th>
+                        <th className="text-center py-2 px-4 font-medium">GPA</th>
+                        <th className="text-center py-2 px-4 font-medium">Strength Score</th>
+                        <th className="text-center py-2 px-4 font-medium">Performance</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {subjects.map((subject: any) => (
+                        <tr key={subject.performance_id || subject.subject} className="border-b hover:bg-muted/50">
+                          <td className="py-3 px-4 font-medium">{subject.subject}</td>
+                          <td className="py-3 px-4 text-center">
+                            <Badge className={getGradeColor(subject.grade_numeric || 0)}>
+                              {subject.current_grade || "N/A"}
+                            </Badge>
+                          </td>
+                          <td className="py-3 px-4 text-center font-mono">
+                            {(subject.grade_numeric || 0).toFixed(2)}
+                          </td>
+                          <td className="py-3 px-4 text-center">
+                            <div className="flex items-center gap-2 justify-center">
+                              <span className="font-mono">{Math.round(subject.strength_score || 0)}%</span>
+                              <Progress
+                                value={subject.strength_score || 0}
+                                className={`w-16 ${getStrengthColor(subject.strength_score || 0)}`}
+                              />
+                            </div>
+                          </td>
+                          <td className="py-3 px-4 text-center">
+                            <div className="flex flex-col items-center gap-1">
+                              {getTrendIcon(subject.trend)}
+                              <span className="text-xs text-muted-foreground">
+                                {subject.trend || "No data"}
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
     </DashboardLayout>
   );

@@ -5,6 +5,18 @@
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
 
+// Extract backend base URL (remove /api/v1)
+const BACKEND_BASE_URL = API_BASE_URL.replace('/api/v1', '');
+
+/**
+ * Convert relative upload URLs to full backend URLs
+ */
+export const getImageUrl = (relativeUrl: string | null | undefined): string | undefined => {
+  if (!relativeUrl) return undefined;
+  if (relativeUrl.startsWith('http')) return relativeUrl; // Already a full URL
+  return `${BACKEND_BASE_URL}${relativeUrl}`;
+};
+
 interface ApiResponse<T> {
   data?: T;
   message?: string;
@@ -291,6 +303,26 @@ export const authApi = {
     phone_number?: string;
     school_name?: string;
   }>("/auth/profile", data),
+
+  uploadProfilePicture: async (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch(`${API_BASE_URL}/auth/profile-picture`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiClient.getToken()}`,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Upload failed' }));
+      throw new Error(error.detail || 'Upload failed');
+    }
+
+    return response.json();
+  },
 };
 
 export const reportsApi = {
@@ -498,6 +530,7 @@ export interface LinkedStudent {
   email: string;
   grade_level?: number;
   school_name?: string;
+  profile_picture?: string;
   relationship_type: string;
   linked_at: string;
 }
@@ -506,6 +539,7 @@ export interface LinkedGuardian {
   user_id: number;
   full_name: string;
   email: string;
+  profile_picture?: string;
   user_type: string;
   relationship_type: string;
   linked_at: string;

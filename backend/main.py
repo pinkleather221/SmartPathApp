@@ -10,6 +10,7 @@ from typing import List, Optional
 from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.staticfiles import StaticFiles
 from fastapi.security import OAuth2PasswordBearer
 from fastapi.responses import JSONResponse, Response
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -72,6 +73,9 @@ app = FastAPI(
     docs_url="/docs" if not settings.is_production else None,  # Disable docs in production
     redoc_url="/redoc" if not settings.is_production else None,
 )
+
+# Mount static files directory for uploaded files
+app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
 
 # Global exception handler
 @app.exception_handler(Exception)
@@ -255,11 +259,62 @@ async def update_profile(
         current_user.grade_level = profile_update.grade_level
     if profile_update.curriculum_type is not None:
         current_user.curriculum_type = profile_update.curriculum_type.value
+    if profile_update.profile_picture is not None:
+        current_user.profile_picture = profile_update.profile_picture
     
     db.commit()
     db.refresh(current_user)
     
     return UserProfile.model_validate(current_user)
+
+
+@app.post(f"{settings.API_V1_PREFIX}/auth/profile-picture")
+async def upload_profile_picture(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Upload a profile picture for the current user."""
+    # Validate file type
+    allowed_types = ["image/jpeg", "image/png", "image/gif", "image/webp"]
+    if file.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid file type. Only JPEG, PNG, GIF, and WebP images are allowed."
+        )
+
+    # Validate file size (max 5MB)
+    file_size = 0
+    content = await file.read()
+    file_size = len(content)
+
+    if file_size > 5 * 1024 * 1024:  # 5MB limit
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File too large. Maximum size is 5MB."
+        )
+
+    # Generate unique filename
+    import uuid
+    file_extension = file.filename.split('.')[-1] if '.' in file.filename else 'jpg'
+    unique_filename = f"profile_{current_user.user_id}_{uuid.uuid4().hex}.{file_extension}"
+
+    # Create uploads directory if it doesn't exist
+    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+
+    # Save file
+    file_path = os.path.join(settings.UPLOAD_DIR, unique_filename)
+    async with aiofiles.open(file_path, 'wb') as f:
+        await f.write(content)
+
+    # Generate URL for the file
+    file_url = f"/uploads/{unique_filename}"
+
+    # Update user's profile picture in database
+    current_user.profile_picture = file_url
+    db.commit()
+
+    return {"profile_picture_url": file_url, "message": "Profile picture uploaded successfully"}
 
 
 # ==================== REPORT ROUTES ====================

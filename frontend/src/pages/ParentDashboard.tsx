@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { relationshipsApi, LinkedStudent, StudentDashboard } from "@/lib/api";
 import { getCurrentUser } from "@/lib/auth";
+import { ConnectionManagement } from "@/components/connections/ConnectionManagement";
 
 const ParentDashboard = () => {
   const navigate = useNavigate();
@@ -60,7 +61,7 @@ const ParentDashboard = () => {
             </p>
           </div>
           {hasChildren && (
-            <Button variant="outline" onClick={() => navigate("/settings")}>
+            <Button variant="outline" onClick={() => navigate("/settings?tab=connections")}>
               <UserPlus className="w-4 h-4 mr-2" />
               Add Child
             </Button>
@@ -310,6 +311,20 @@ const ParentDashboard = () => {
             )}
           </>
         )}
+
+        {/* Connection Management */}
+        <div className="mt-8">
+          <ConnectionManagement
+            students={children || []}
+            userType="parent"
+            onStudentRemoved={(studentId) => {
+              // If the removed student was the currently viewed child, navigate away
+              if (firstChild?.user_id === studentId) {
+                window.location.reload(); // Simple refresh to update the view
+              }
+            }}
+          />
+        </div>
       </div>
     </DashboardLayout>
   );

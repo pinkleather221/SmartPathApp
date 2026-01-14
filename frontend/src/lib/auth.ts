@@ -10,6 +10,7 @@ export interface User {
   user_type: string;
   grade_level?: number;
   curriculum_type: string;
+  profile_picture?: string;
 }
 
 /**

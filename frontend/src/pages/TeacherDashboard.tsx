@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { relationshipsApi, LinkedStudent } from "@/lib/api";
 import { getCurrentUser } from "@/lib/auth";
+import { ConnectionManagement } from "@/components/connections/ConnectionManagement";
 
 const TeacherDashboard = () => {
   const navigate = useNavigate();
@@ -46,7 +47,7 @@ const TeacherDashboard = () => {
               Monitor your students' academic progress
             </p>
           </div>
-          <Button onClick={() => navigate("/settings")} className="gap-2">
+          <Button onClick={() => navigate("/settings?tab=connections")} className="gap-2">
             <UserPlus className="w-4 h-4" />
             Add Students
           </Button>
@@ -176,6 +177,14 @@ const TeacherDashboard = () => {
             )}
           </CardContent>
         </Card>
+
+        {/* Connection Management */}
+        <div className="mt-8">
+          <ConnectionManagement
+            students={students || []}
+            userType="teacher"
+          />
+        </div>
       </div>
     </DashboardLayout>
   );

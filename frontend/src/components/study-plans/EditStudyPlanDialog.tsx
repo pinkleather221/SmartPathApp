@@ -116,7 +116,7 @@ const EditStudyPlanDialog = ({ isOpen, onClose, plan, onSave }: EditStudyPlanDia
                     </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
-                    <div className="space-y-2">
+                    {/* <div className="space-y-2">
                         <label className="text-sm font-medium">Subject</label>
                         <Input
                             value={subject}
@@ -141,7 +141,7 @@ const EditStudyPlanDialog = ({ isOpen, onClose, plan, onSave }: EditStudyPlanDia
                             placeholder="Your study approach..."
                             rows={3}
                         />
-                    </div>
+                    </div> */}
                     <div className="space-y-2">
                         <label className="text-sm font-medium">Available Hours Per Day</label>
                         <Input
