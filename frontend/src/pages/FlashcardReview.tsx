@@ -86,6 +86,13 @@ const FlashcardReview = () => {
     
     try {
       await flashcardsApi.review(parseInt(id), { correct: true });
+      try {
+        const cards = await flashcardsApi.list() as Flashcard[];
+        const foundCard = cards.find((c: Flashcard) => (c.card_id || c.flashcard_id) === parseInt(id));
+        if (foundCard) {
+          setProgress(foundCard.mastery_level || 0);
+        }
+      } catch {}
       toast({
         title: "Great job!",
         description: "Your answer was marked as correct.",
@@ -106,6 +113,13 @@ const FlashcardReview = () => {
     
     try {
       await flashcardsApi.review(parseInt(id), { correct: false });
+      try {
+        const cards = await flashcardsApi.list() as Flashcard[];
+        const foundCard = cards.find((c: Flashcard) => (c.card_id || c.flashcard_id) === parseInt(id));
+        if (foundCard) {
+          setProgress(foundCard.mastery_level || 0);
+        }
+      } catch {}
       toast({
         title: "Keep practicing!",
         description: "This card will be reviewed again soon.",

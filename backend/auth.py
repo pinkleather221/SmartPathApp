@@ -1,17 +1,12 @@
-"""
-Authentication and authorization module.
-Handles JWT token generation, password hashing, and user authentication.
-"""
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, Dict, Any
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy.orm import Session
 
 from config import settings
-from database import get_db, User
+from supabase_db import get_user_by_id, get_user_by_email
 
 # Password hashing context
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -55,9 +50,8 @@ def verify_token(token: str) -> Optional[dict]:
 
 
 async def get_current_user(
-    token: Optional[str] = Depends(oauth2_scheme),
-    db: Session = Depends(get_db)
-) -> User:
+    token: Optional[str] = Depends(oauth2_scheme)
+) -> Optional[Dict[str, Any]]:
     """Get the current authenticated user from JWT token."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -82,11 +76,11 @@ async def get_current_user(
     except (ValueError, TypeError):
         raise credentials_exception
 
-    user = db.query(User).filter(User.user_id == user_id).first()
+    user = get_user_by_id(user_id)
     if user is None:
         raise credentials_exception
 
-    if not user.is_active:
+    if not user.get('is_active', False):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User account is inactive"
@@ -96,10 +90,10 @@ async def get_current_user(
 
 
 async def get_current_active_user(
-    current_user: User = Depends(get_current_user)
-) -> User:
+    current_user: Dict[str, Any] = Depends(get_current_user)
+) -> Dict[str, Any]:
     """Get current active user (additional check for active status)."""
-    if not current_user.is_active:
+    if not current_user.get('is_active', False):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User account is inactive"
@@ -107,20 +101,21 @@ async def get_current_active_user(
     return current_user
 
 
-def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
+def authenticate_user(email: str, password: str) -> Optional[Dict[str, Any]]:
     """Authenticate a user by email and password."""
-    user = db.query(User).filter(User.email == email).first()
+    user = get_user_by_email(email)
     if not user:
         return None
-    if not verify_password(password, user.password_hash):
+    if not verify_password(password, user['password_hash']):
         return None
     return user
 
 
 def require_user_type(*allowed_types: str):
     """Dependency factory to require specific user types."""
-    async def user_type_checker(current_user: User = Depends(get_current_active_user)) -> User:
-        if current_user.user_type.value not in allowed_types:
+    async def user_type_checker(current_user: Dict[str, Any] = Depends(get_current_active_user)) -> Dict[str, Any]:
+        user_type = current_user.get('user_type', '').upper()
+        if user_type not in [t.upper() for t in allowed_types]:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Access denied. Required user types: {', '.join(allowed_types)}"

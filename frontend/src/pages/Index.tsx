@@ -1,10 +1,34 @@
 import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { GraduationCap, TrendingUp, Brain, Compass, ArrowRight } from "lucide-react";
+import TextType from "@/components/react-bits/TextType";
+import Aurora from "@/components/react-bits/Aurora";
+import { ModeToggle } from "@/components/mode-toggle";
+import { useTheme } from "@/components/theme-provider";
 
 const Index = () => {
+  const { theme } = useTheme();
+  const [systemDark, setSystemDark] = useState(() =>
+    typeof window !== "undefined" ? window.matchMedia("(prefers-color-scheme: dark)").matches : false
+  );
+
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const handler = () => setSystemDark(media.matches);
+    media.addEventListener("change", handler);
+    return () => media.removeEventListener("change", handler);
+  }, []);
+
+  const isDark = theme === "dark" || (theme === "system" && systemDark);
+
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-background via-muted to-background">
+    <div className="relative min-h-screen w-full bg-gradient-to-br from-background via-muted to-background overflow-hidden">
+      {isDark && (
+        <div className="pointer-events-none absolute inset-0 opacity-80">
+          <Aurora colorStops={["#3A29FF", "#FF94B4", "#FF3232"]} blend={0.5} amplitude={1.0} speed={0.5} />
+        </div>
+      )}
       {/* Header */}
       <header className="border-b border-border/50 bg-card/50 backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
@@ -15,6 +39,7 @@ const Index = () => {
             <span className="text-xl font-bold text-foreground">SmartPath</span>
           </Link>
           <div className="flex items-center gap-3">
+            <ModeToggle />
             <Link to="/login">
               <Button variant="ghost">Sign In</Button>
             </Link>
@@ -36,7 +61,19 @@ const Index = () => {
           <h1 className="text-4xl lg:text-6xl font-bold text-foreground leading-tight">
             Excel Academically &<br />
             Make Informed{" "}
-            <span className="text-primary">Career Decisions</span>
+            {isDark ? (
+              <TextType
+                as="span"
+                className="text-primary"
+                text={["Career Decisions", "Study Plans", "Exam Success"]}
+                typingSpeed={75}
+                pauseDuration={1500}
+                showCursor={true}
+                cursorCharacter="|"
+              />
+            ) : (
+              <span className="text-primary">Career Decisions</span>
+            )}
           </h1>
           
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto">

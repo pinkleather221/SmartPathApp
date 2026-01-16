@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { GraduationCap } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { login } from "@/lib/auth";
+import { ModeToggle } from "@/components/mode-toggle";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -43,7 +44,10 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-background via-muted to-background p-4">
+    <div className="relative min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-background via-muted to-background p-4">
+      <div className="absolute top-4 right-4">
+        <ModeToggle />
+      </div>
       <div className="w-full max-w-md">
         <div className="flex flex-col items-center mb-8">
           <div className="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center mb-4 shadow-lg">

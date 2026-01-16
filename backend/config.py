@@ -1,7 +1,3 @@
-"""
-Configuration management for SmartPath backend.
-Handles environment variables and application settings.
-"""
 import os
 import warnings
 from typing import Optional, List
@@ -11,8 +7,6 @@ from functools import lru_cache
 
 
 class Settings(BaseSettings):
-    """Application settings loaded from environment variables."""
-    
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
     
     # Application
@@ -37,7 +31,6 @@ class Settings(BaseSettings):
     # Database URL normalization - handles postgres:// -> postgresql:// conversion
     @property
     def database_url_fixed(self) -> str:
-        """Normalize DATABASE_URL to use postgresql:// protocol."""
         url = self.DATABASE_URL
         if url and url.startswith("postgres://"):
             url = url.replace("postgres://", "postgresql://", 1)
@@ -88,7 +81,6 @@ class Settings(BaseSettings):
     
     @property
     def cors_origins_list(self) -> List[str]:
-        """Get CORS origins as a list, parsing from comma-separated string."""
         default_origins = [
             "http://localhost:3000",
             "http://localhost:5173",
@@ -116,14 +108,12 @@ class Settings(BaseSettings):
     
     @property
     def allowed_hosts_list(self) -> List[str]:
-        """Get allowed hosts as a list, parsing from comma-separated string."""
         if not self.ALLOWED_HOSTS or self.ALLOWED_HOSTS.strip() == "":
             return []
         return [host.strip() for host in self.ALLOWED_HOSTS.split(",") if host.strip()]
     
     @property
     def is_production(self) -> bool:
-        """Check if running in production."""
         return self.ENVIRONMENT.lower() == "production" or os.getenv("RENDER") == "true"
     
     # Kenyan Context
@@ -137,26 +127,14 @@ class Settings(BaseSettings):
     
 @lru_cache()
 def get_settings() -> Settings:
-    """Get cached settings instance."""
     settings_instance = Settings()
     
-    # SECRET_KEY validation - strictly enforce in production
+    # SECRET_KEY validation
     if not settings_instance.SECRET_KEY:
-        if settings_instance.ENVIRONMENT == "production":
-            raise ValueError(
-                "SECRET_KEY must be set in production! "
-                "Generate one with: openssl rand -hex 32"
-            )
-        elif not os.getenv("SKIP_SECRET_CHECK"):
-            warnings.warn(
-                "SECRET_KEY not set! Generate one with: openssl rand -hex 32\n"
-                "Set SKIP_SECRET_CHECK=1 to bypass this warning (development only)",
-                UserWarning
-            )
-            # Set a default for development (DO NOT USE IN PRODUCTION)
+        if os.getenv("SKIP_SECRET_CHECK"):
             settings_instance.SECRET_KEY = "development-secret-key-change-in-production"
         else:
-            settings_instance.SECRET_KEY = "development-secret-key-change-in-production"
+            raise ValueError("SECRET_KEY must be set. Set SKIP_SECRET_CHECK=1 to allow a temporary development default.")
     
     # Production safety checks
     if settings_instance.is_production:
@@ -170,4 +148,23 @@ def get_settings() -> Settings:
 
 # Global settings instance
 settings = get_settings()
+
+# Initialize Supabase client
+try:
+    from supabase import create_client, Client
+    if not settings.SUPABASE_URL or not settings.SUPABASE_KEY:
+        supabase = None
+    else:
+        try:
+            from supabase.lib.client_options import ClientOptions
+            supabase: Client = create_client(
+                settings.SUPABASE_URL,
+                settings.SUPABASE_KEY,
+                options=ClientOptions(postgrest_client_timeout=10),
+            )
+        except Exception:
+            supabase: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
+except ImportError:
+    supabase = None
+    warnings.warn("Supabase client not available. Install with: pip install supabase", UserWarning)
 

@@ -1,7 +1,3 @@
-"""
-LLM integration service for AI-powered features.
-Uses Google Gemini API with caching and error handling.
-"""
 import json
 import hashlib
 from typing import Dict, List, Optional, Any
@@ -10,6 +6,8 @@ import google.generativeai as genai
 from google.generativeai.types import HarmCategory, HarmBlockThreshold
 
 from config import settings
+import logging
+logger = logging.getLogger(__name__)
 
 
 class LLMService:
@@ -29,11 +27,11 @@ class LLMService:
                 self.model = genai.GenerativeModel(self.model_name)
                 self.client_available = True
             except Exception as e:
-                print(f"Warning: Gemini initialization error: {e}")
+                logger.warning(f"Gemini initialization error: {e}")
                 self.client_available = False
         else:
             self.client_available = False
-            print("Warning: No Gemini API key configured. LLM features will be disabled.")
+            logger.warning("No Gemini API key configured. LLM features will be disabled.")
     
     def _generate_cache_key(self, prompt: str, context: Dict) -> str:
         """Generate cache key for prompt."""
@@ -171,7 +169,7 @@ class LLMService:
             
             return response
         except Exception as e:
-            print(f"LLM generation error: {e}")
+            logger.error(f"LLM generation error: {e}")
             return self._get_fallback_response(prompt)
     
     def _get_fallback_response(self, prompt: str) -> str:
@@ -243,7 +241,7 @@ Make questions progressively more challenging. Ensure content is relevant to Ken
             else:
                 return []
         except Exception as e:
-            print(f"Flashcard generation error: {e}")
+            logger.error(f"Flashcard generation error: {e}")
             return []
     
     # ==================== ACADEMIC FEEDBACK ====================
@@ -305,9 +303,7 @@ Be specific, constructive, and culturally appropriate for Kenyan students."""
                 "next_steps": feedback_data.get("next_steps", ["Review weak areas", "Practice regularly"])
             }
         except Exception as e:
-            print(f"Feedback generation error: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"Feedback generation error: {e}", exc_info=True)
             return {
                 "strengths": [],
                 "weaknesses": [],
@@ -384,7 +380,7 @@ Return your response as a JSON array:"""
                 raise ValueError("Invalid response format")
                 
         except Exception as e:
-            print(f"Error generating AI recommendations: {e}")
+            logger.error(f"Error generating AI recommendations: {e}")
             # Fallback recommendations
             recs = []
             if weak_subjects:
@@ -538,7 +534,7 @@ Return ONLY the JSON array, no other text:"""
 
             return normalized[:5]
         except Exception as e:
-            print(f"Career recommendation error: {e}")
+            logger.error(f"Career recommendation error: {e}")
             # Enhanced fallback based on subjects
             fallback_careers = {
                 "Mathematics": {
@@ -831,7 +827,7 @@ Make it age-appropriate and aligned with Kenyan curriculum."""
             response = await self.generate(prompt, json_mode=True)
             return json.loads(response)
         except Exception as e:
-            print(f"Learning strategy error: {e}")
+            logger.error(f"Learning strategy error: {e}")
             return {
                 "explanation": f"Study {topic} in {subject} regularly.",
                 "examples": [],
@@ -872,7 +868,7 @@ Be encouraging and constructive. Highlight what the student got right and what n
             response = await self.generate(prompt, json_mode=True)
             return json.loads(response)
         except Exception as e:
-            print(f"Answer evaluation error: {e}")
+            logger.error(f"Answer evaluation error: {e}")
             # Simple keyword-based fallback
             is_correct = student_answer.lower() in correct_answer.lower() or correct_answer.lower() in student_answer.lower()
             return {
@@ -916,7 +912,7 @@ Provide analysis in JSON format:
             response = await self.generate(prompt, json_mode=True)
             return json.loads(response)
         except Exception as e:
-            print(f"Performance analysis error: {e}")
+            logger.error(f"Performance analysis error: {e}")
             return {
                 "trends": {},
                 "overall_assessment": "Continue monitoring performance.",

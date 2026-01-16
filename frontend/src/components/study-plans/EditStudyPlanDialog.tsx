@@ -85,7 +85,6 @@ const EditStudyPlanDialog = ({ isOpen, onClose, plan, onSave }: EditStudyPlanDia
                 study_strategy: strategy,
                 available_hours_per_day: availableHours,
                 status: status,
-                is_active: status === "active" || status === "in progress",
                 priority: priority
             });
 

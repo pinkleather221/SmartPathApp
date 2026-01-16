@@ -24,7 +24,9 @@ import {
 type StudyPlan = {
   plan_id: number;
   subject?: string;
+  subjects?: string[];
   focus_area?: string;
+  description?: string;
   strategy?: string;
   available_hours_per_day?: number;
   daily_duration_minutes?: number;
@@ -32,7 +34,7 @@ type StudyPlan = {
   is_active?: boolean;
   end_date?: string;
   progress_percentage: number;
-  priority?: string;
+  priority?: number | string | null;
   sessions?: any[];
 };
 
@@ -42,29 +44,41 @@ interface StudyPlanCardProps {
   onDelete: (plan: StudyPlan) => void;
 }
 
-const getPriorityColor = (priority: number | null | undefined) => {
-  if (priority === null || priority === undefined) {
+const normalizePriority = (priority: unknown): number | null => {
+  if (priority === null || priority === undefined) return null;
+  if (typeof priority === "number" && Number.isFinite(priority)) return priority;
+  if (typeof priority === "string") {
+    const n = Number(priority);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+};
+
+const getPriorityColor = (priority: unknown) => {
+  const p = normalizePriority(priority);
+  if (p === null) {
     return "bg-muted text-muted-foreground";
   }
-  if (priority >= 8) {
+  if (p >= 8) {
     return "bg-destructive/10 text-destructive"; // High
-  } else if (priority >= 4) {
+  } else if (p >= 4) {
     return "bg-warning/10 text-warning"; // Medium
-  } else if (priority >= 1) {
+  } else if (p >= 1) {
     return "bg-success/10 text-success"; // Low
   }
   return "bg-muted text-muted-foreground"; // Default for 0 or invalid numbers
 };
 
-const getPriorityLabel = (priority: number | null | undefined) => {
-  if (priority === null || priority === undefined) {
+const getPriorityLabel = (priority: unknown) => {
+  const p = normalizePriority(priority);
+  if (p === null) {
     return "N/A";
   }
-  if (priority >= 8) {
+  if (p >= 8) {
     return "High";
-  } else if (priority >= 4) {
+  } else if (p >= 4) {
     return "Medium";
-  } else if (priority >= 1) {
+  } else if (p >= 1) {
     return "Low";
   }
   return "N/A"; // Default for 0 or invalid numbers
@@ -151,7 +165,7 @@ const StudyPlanCard = ({ plan, onEdit, onDelete }: StudyPlanCardProps) => (
             variant="ghost"
             size="sm"
             onClick={() => onDelete(plan)}
-            disabled={plan.status === "completed"}
+            // disabled={plan.status === "completed"}
           >
             <Trash2 className="w-4 h-4 text-destructive" />
           </Button>
@@ -176,8 +190,8 @@ const StudyPlans = () => {
   const loadPlans = async () => {
     try {
       setLoading(true);
-      const data = await studyPlansApi.getAll(); // Fetch all plans
-      setPlans(data || []);
+      const data = (await studyPlansApi.getAll()) as unknown;
+      setPlans(Array.isArray(data) ? (data as StudyPlan[]) : []);
     } catch (error) {
       toast({
         title: "Error loading study plans",

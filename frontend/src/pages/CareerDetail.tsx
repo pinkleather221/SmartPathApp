@@ -145,11 +145,40 @@ const CareerDetail = () => {
             </div>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" disabled={career.is_favorite}>
+            <Button
+              variant="outline"
+              onClick={async () => {
+                try {
+                  if (career.is_favorite) {
+                    await careerApi.unfavorite(career.recommendation_id);
+                    setCareer({ ...career, is_favorite: false });
+                    toast({ title: "Removed", description: "Career removed from favorites" });
+                  } else {
+                    await careerApi.favorite(career.recommendation_id);
+                    setCareer({ ...career, is_favorite: true });
+                    toast({ title: "Saved", description: "Career saved to favorites" });
+                  }
+                } catch (e) {
+                  toast({ title: "Error", description: e instanceof Error ? e.message : "Failed to save favorite", variant: "destructive" });
+                }
+              }}
+            >
               <Star className={`w-4 h-4 mr-2 ${career.is_favorite ? "fill-yellow-400" : ""}`} />
-              {career.is_favorite ? "Saved" : "Save Favorite"}
+              {career.is_favorite ? "Remove Favorite" : "Save Favorite"}
             </Button>
-            <Button variant="outline">
+            <Button
+              variant="outline"
+              onClick={async () => {
+                try {
+                  const res = await careerApi.share(career.recommendation_id);
+                  const url = (res as any)?.data?.share_url || window.location.origin + `/career/${career.recommendation_id}`;
+                  await navigator.clipboard.writeText(window.location.origin + url.replace(/^\//, "/"));
+                  toast({ title: "Link copied", description: "Career share link copied to clipboard" });
+                } catch (e) {
+                  toast({ title: "Error", description: e instanceof Error ? e.message : "Failed to generate share link", variant: "destructive" });
+                }
+              }}
+            >
               <Share2 className="w-4 h-4 mr-2" />
               Share
             </Button>

@@ -464,6 +464,12 @@ export const careerApi = {
   }) => apiClient.post("/career/quiz", data),
   getDetails: (recommendationId: number) =>
     apiClient.get(`/career/${recommendationId}/details`),
+  favorite: (recommendationId: number) =>
+    apiClient.post(`/career/${recommendationId}/favorite`, {}),
+  unfavorite: (recommendationId: number) =>
+    apiClient.delete(`/career/${recommendationId}/favorite`),
+  share: (recommendationId: number) =>
+    apiClient.post(`/career/${recommendationId}/share`, {}),
 };
 
 export const studyPlansApi = {
@@ -487,7 +493,6 @@ export const studyPlansApi = {
     focus_area?: string;
     study_strategy?: string;
     available_hours_per_day?: number;
-    is_active?: boolean;
     status?: string;
     completed_topics?: string[]
   }) =>
@@ -631,4 +636,3 @@ export interface StudentCareer {
 }
 
 export default apiClient;
-

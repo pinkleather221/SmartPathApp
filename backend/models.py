@@ -71,6 +71,20 @@ class UserRegister(BaseModel):
             raise ValueError("grade_level is required for students")
         return v
 
+    @validator("curriculum_type", pre=True)
+    def normalize_curriculum_type(cls, v):
+        if v is None:
+            return CurriculumType.CBE
+        if isinstance(v, CurriculumType):
+            return v
+        if isinstance(v, str):
+            s = v.strip().lower()
+            if s == "cbe":
+                return CurriculumType.CBE
+            if s in {"8-4-4", "8 4 4", "844"}:
+                return CurriculumType.EIGHT_FOUR_FOUR
+        return v
+
 
 class UserLogin(BaseModel):
     """User login request model."""
@@ -99,6 +113,20 @@ class UserProfile(BaseModel):
     created_at: datetime
     
     model_config = {"from_attributes": True}
+    
+    @validator("curriculum_type", pre=True)
+    def normalize_curriculum_type(cls, v):
+        if v is None:
+            return CurriculumType.CBE
+        if isinstance(v, CurriculumType):
+            return v
+        if isinstance(v, str):
+            s = v.strip().lower()
+            if s == "cbe":
+                return CurriculumType.CBE
+            if s in {"8-4-4", "8 4 4", "844"}:
+                return CurriculumType.EIGHT_FOUR_FOUR
+        return v
 
 
 class UserProfileUpdate(BaseModel):
@@ -109,6 +137,20 @@ class UserProfileUpdate(BaseModel):
     profile_picture: Optional[str] = None
     grade_level: Optional[int] = Field(None, ge=3, le=12)
     curriculum_type: Optional[CurriculumType] = None
+
+    @validator("curriculum_type", pre=True)
+    def normalize_curriculum_type(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, CurriculumType):
+            return v
+        if isinstance(v, str):
+            s = v.strip().lower()
+            if s == "cbe":
+                return CurriculumType.CBE
+            if s in {"8-4-4", "8 4 4", "844"}:
+                return CurriculumType.EIGHT_FOUR_FOUR
+        return v
 
 
 # ==================== REPORT MODELS ====================
@@ -226,19 +268,29 @@ class FlashcardResponse(BaseModel):
     def model_validate(cls, obj, **kwargs):
         """Custom validation to calculate mastery_level and review_count."""
         from utils import calculate_mastery_level
+        from collections.abc import Mapping
         
-        if hasattr(obj, 'times_reviewed') and hasattr(obj, 'times_correct') and hasattr(obj, 'difficulty'):
-            mastery = calculate_mastery_level(
-                obj.times_reviewed,
-                obj.times_correct,
-                obj.difficulty.value if hasattr(obj.difficulty, 'value') else str(obj.difficulty)
-            )
-            # Convert to percentage (0-100)
-            mastery_level = mastery * 100
-            review_count = obj.times_reviewed
-        else:
-            mastery_level = 0.0
-            review_count = 0
+        def get_field(source, key: str):
+            if isinstance(source, Mapping):
+                return source.get(key)
+            return getattr(source, key, None)
+        
+        times_reviewed = get_field(obj, "times_reviewed")
+        times_correct = get_field(obj, "times_correct")
+        difficulty = get_field(obj, "difficulty")
+        
+        if times_reviewed is None:
+            times_reviewed = 0
+        if times_correct is None:
+            times_correct = 0
+        
+        difficulty_value = None
+        if difficulty is not None:
+            difficulty_value = difficulty.value if hasattr(difficulty, "value") else str(difficulty)
+        
+        mastery = calculate_mastery_level(times_reviewed, times_correct, difficulty_value or "medium")
+        mastery_level = mastery * 100
+        review_count = times_reviewed
         
         # Create dict with calculated fields
         data = obj.__dict__.copy() if hasattr(obj, '__dict__') else dict(obj)
@@ -351,6 +403,21 @@ class StudyPlanResponse(BaseModel):
     @classmethod
     def model_validate(cls, obj, **kwargs):
         """Override to ensure no null values."""
+        def _parse_dt(value):
+            if value is None:
+                return None
+            if isinstance(value, datetime):
+                return value
+            if isinstance(value, str):
+                v = value.strip()
+                if v.endswith("Z"):
+                    v = v[:-1] + "+00:00"
+                try:
+                    return datetime.fromisoformat(v)
+                except Exception:
+                    return None
+            return None
+
         # Handle both dict and SQLAlchemy objects
         if isinstance(obj, dict):
             # Ensure focus_area is never null
@@ -364,12 +431,16 @@ class StudyPlanResponse(BaseModel):
                     f"Break down topics into manageable chunks, practice regularly, "
                     f"and review previous lessons weekly."
                 )
+            if obj.get("strategy") is None or obj.get("strategy") == "":
+                obj["strategy"] = obj.get("study_strategy") or ""
             # Ensure weekly_schedule_json is never null
             if obj.get("weekly_schedule_json") is None:
                 obj["weekly_schedule_json"] = []
             # Ensure sessions is never null
             if obj.get("sessions") is None:
                 obj["sessions"] = []
+            if isinstance(obj.get("status"), str):
+                obj["status"] = obj["status"].lower()
         else:
             # Handle SQLAlchemy objects
             if hasattr(obj, "focus_area") and (obj.focus_area is None or obj.focus_area == ""):
@@ -393,15 +464,28 @@ class StudyPlanResponse(BaseModel):
 
         if isinstance(obj, dict):
             if "start_date" in obj and "end_date" in obj and "daily_duration_minutes" in obj:
-                start_date = obj["start_date"]
-                end_date = obj["end_date"]
+                start_date = _parse_dt(obj["start_date"]) or obj["start_date"]
+                end_date = _parse_dt(obj["end_date"]) or obj["end_date"]
                 daily_duration_minutes = obj["daily_duration_minutes"]
+                if isinstance(daily_duration_minutes, str):
+                    try:
+                        daily_duration_minutes = int(float(daily_duration_minutes))
+                    except Exception:
+                        daily_duration_minutes = None
+                if isinstance(start_date, datetime):
+                    obj["start_date"] = start_date
+                if isinstance(end_date, datetime):
+                    obj["end_date"] = end_date
+            if "created_at" in obj:
+                created_at = _parse_dt(obj.get("created_at"))
+                if created_at:
+                    obj["created_at"] = created_at
         elif hasattr(obj, "start_date") and hasattr(obj, "end_date") and hasattr(obj, "daily_duration_minutes"):
-            start_date = obj.start_date
-            end_date = obj.end_date
+            start_date = _parse_dt(obj.start_date) or obj.start_date
+            end_date = _parse_dt(obj.end_date) or obj.end_date
             daily_duration_minutes = obj.daily_duration_minutes
 
-        if start_date and end_date and daily_duration_minutes:
+        if isinstance(start_date, datetime) and isinstance(end_date, datetime) and daily_duration_minutes:
             # Calculate total planned hours
             days_diff = (end_date - start_date).days + 1  # Include both start and end dates
             planned_hours = (days_diff * daily_duration_minutes) / 60
@@ -624,4 +708,3 @@ def validate_kenyan_subject(subject: str) -> str:
     ]
     # Allow any subject but normalize
     return subject.title()
-
