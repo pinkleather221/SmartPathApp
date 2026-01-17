@@ -14,6 +14,7 @@ import {
   Settings,
   GraduationCap,
   Menu,
+  Calculator,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -41,6 +42,7 @@ const studentNavigation = [
   { name: "Flashcards", href: "/flashcards", icon: Brain },
   { name: "Career", href: "/career", icon: Compass },
   { name: "Study Plans", href: "/study-plans", icon: Calendar },
+  { name: "Math Solver", href: "/math-solver", icon: Calculator },
   { name: "Insights", href: "/insights", icon: Lightbulb },
   { name: "Settings", href: "/settings", icon: Settings },
 ];

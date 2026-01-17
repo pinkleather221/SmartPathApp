@@ -38,6 +38,49 @@ class LLMService:
         content = f"{prompt}{json.dumps(context, sort_keys=True)}"
         return hashlib.md5(content.encode()).hexdigest()
     
+    async def solve_math_problem(
+        self,
+        problem_text: Optional[str] = None,
+        image_bytes: Optional[bytes] = None,
+        image_mime_type: Optional[str] = None
+    ) -> str:
+        """Solve a math problem using Gemini (Text and/or Image)."""
+        if not self.client_available:
+             return "AI service is currently unavailable. Please configure GEMINI_API_KEY."
+
+        system_instruction = (
+            "You are an expert math tutor for Kenyan high school student. "
+            "Solve the problem step-by-step. "
+            "Explain the logic clearly. "
+            "Use LaTeX for mathematical formulas, enclosing them in single dollar signs $...$ for inline and double $$...$$ for block equations. "
+            "If the image contains handwritten text, transcribe it first then solve. "
+            "Format the output with Markdown."
+        )
+
+        contents = [system_instruction]
+        
+        if problem_text:
+            contents.append(problem_text)
+            
+        if image_bytes and image_mime_type:
+            contents.append({"mime_type": image_mime_type, "data": image_bytes})
+            
+        if len(contents) == 1: # Only system instruction
+             return "Please provide a math problem (text or image)."
+
+        try:
+            response = await self.model.generate_content_async(
+                contents,
+                 generation_config=genai.types.GenerationConfig(
+                    temperature=0.2, # Low temp for math
+                    max_output_tokens=2048,
+                )
+            )
+            return response.text
+        except Exception as e:
+            logger.error(f"Math solver error: {e}")
+            return f"Error solving problem: {str(e)}"
+
     async def _call_gemini(self, prompt: str, system_prompt: Optional[str] = None) -> str:
         """Call Gemini API."""
         if not self.client_available:
@@ -312,6 +355,49 @@ Be specific, constructive, and culturally appropriate for Kenyan students."""
                 "next_steps": ["Review weak areas", "Practice regularly"]
             }
     
+    async def solve_math_problem(
+        self,
+        problem_text: Optional[str] = None,
+        image_bytes: Optional[bytes] = None,
+        image_mime_type: Optional[str] = None
+    ) -> str:
+        """Solve a math problem using Gemini (Text and/or Image)."""
+        if not self.client_available:
+             return "AI service is currently unavailable. Please configure GEMINI_API_KEY."
+
+        system_instruction = (
+            "You are an expert math tutor for Kenyan high school student. "
+            "Solve the problem step-by-step. "
+            "Explain the logic clearly. "
+            "Use LaTeX for mathematical formulas, enclosing them in single dollar signs $...$ for inline and double $$...$$ for block equations. "
+            "If the image contains handwritten text, transcribe it first then solve. "
+            "Format the output with Markdown."
+        )
+
+        contents = [system_instruction]
+        
+        if problem_text:
+            contents.append(problem_text)
+            
+        if image_bytes and image_mime_type:
+            contents.append({"mime_type": image_mime_type, "data": image_bytes})
+            
+        if len(contents) == 1: # Only system instruction
+             return "Please provide a math problem (text or image)."
+
+        try:
+            response = await self.model.generate_content_async(
+                contents,
+                 generation_config=genai.types.GenerationConfig(
+                    temperature=0.2, # Low temp for math
+                    max_output_tokens=2048,
+                )
+            )
+            return response.text
+        except Exception as e:
+            logger.error(f"Math solver error: {e}")
+            return f"Error solving problem: {str(e)}"
+
     # ==================== CAREER RECOMMENDATIONS ====================
     
     async def generate_study_recommendations(

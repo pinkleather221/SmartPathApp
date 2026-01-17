@@ -493,6 +493,7 @@ export const studyPlansApi = {
     focus_area?: string;
     study_strategy?: string;
     available_hours_per_day?: number;
+    is_active?: boolean;
     status?: string;
     completed_topics?: string[]
   }) =>
@@ -595,6 +596,42 @@ export const relationshipsApi = {
   }) => apiClient.post(`/students/${studentId}/insights`, { ...data, student_id: studentId }),
   removeStudentLink: (studentId: number) =>
     apiClient.delete(`/relationships/${studentId}`),
+};
+
+export const mathApi = {
+  solve: (prompt?: string, file?: File) => {
+    const formData = new FormData();
+    if (prompt) formData.append("prompt", prompt);
+    if (file) formData.append("file", file);
+
+    const headers: HeadersInit = {};
+    const token = apiClient.getToken();
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    const url = `${API_BASE_URL}/math/solve`;
+    
+    // Use a longer timeout for LLM
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minutes
+
+    return fetch(url, {
+      method: "POST",
+      headers,
+      body: formData,
+      signal: controller.signal,
+    })
+    .then(async (response) => {
+        clearTimeout(timeoutId);
+        return apiClient.handleResponse<{ solution: string; success: boolean }>(response);
+    })
+    .catch((error) => {
+        clearTimeout(timeoutId);
+        if (error.name === 'AbortError') throw new Error("Request timed out");
+        throw error;
+    });
+  }
 };
 
 // Insight types for guardian-created insights
