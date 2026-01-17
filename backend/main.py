@@ -348,6 +348,43 @@ async def upload_profile_picture(
     return {"profile_picture_url": file_url, "message": "Profile picture uploaded successfully"}
 
 
+
+# ==================== MATH SOLVER ROUTES ====================
+
+@app.post(f"{settings.API_V1_PREFIX}/math/solve")
+async def solve_math(
+    file: Optional[UploadFile] = File(None),
+    prompt: Optional[str] = Form(None),
+    current_user: Dict[str, Any] = Depends(get_current_active_user)
+):
+    """Solve a math problem from text or uploaded image."""
+    from llm_service import llm_service
+    
+    if not file and not prompt:
+        raise HTTPException(status_code=400, detail="Please provide either an image or a text problem.")
+
+    image_bytes = None
+    image_mime_type = None
+
+    if file:
+        allowed_types = ["image/jpeg", "image/jpg", "image/png", "image/webp"]
+        if file.content_type not in allowed_types:
+            raise HTTPException(status_code=400, detail="Only JPEG, PNG, and WebP images are supported.")
+        image_bytes = await file.read()
+        image_mime_type = file.content_type
+
+    try:
+        solution = await llm_service.solve_math_problem(
+            problem_text=prompt,
+            image_bytes=image_bytes,
+            image_mime_type=image_mime_type
+        )
+        return {"solution": solution, "success": True}
+    except Exception as e:
+        logger.error(f"Math solver route error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to solve math problem")
+
+
 # ==================== REPORT ROUTES ====================
 
 class OCRPreviewResponse(BaseModel):
