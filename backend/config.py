@@ -70,9 +70,9 @@ class Settings(BaseSettings):
     CACHE_TTL: int = 3600  # 1 hour
     
     # Email Settings
-    MAIL_USERNAME: str = os.getenv("MAIL_USERNAME", "no-reply@smartpath.app")
-    MAIL_PASSWORD: str = os.getenv("MAIL_PASSWORD", "")
-    MAIL_FROM: str = os.getenv("MAIL_FROM", "no-reply@smartpath.app")
+    MAIL_USERNAME: str = os.getenv("MAIL_USERNAME", "franklineomari@gmail.com")
+    MAIL_PASSWORD: str = os.getenv("MAIL_PASSWORD", "dela paow bcqz sptx")
+    MAIL_FROM: str = os.getenv("MAIL_FROM", "franklineomari@gmail.com")
     MAIL_PORT: int = int(os.getenv("MAIL_PORT", "587"))
     MAIL_SERVER: str = os.getenv("MAIL_SERVER", "smtp.gmail.com")
     MAIL_STARTTLS: bool = os.getenv("MAIL_STARTTLS", "True").lower() == "true"

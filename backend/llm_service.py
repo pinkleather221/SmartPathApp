@@ -325,6 +325,56 @@ Make questions progressively more challenging. Ensure content is relevant to Ken
             logger.error(f"Flashcard generation error: {e}")
             return []
     
+    async def get_resource_recommendations(
+        self,
+        subject: str,
+        topic: str,
+        grade_level: Optional[int] = None
+    ) -> List[Dict[str, Any]]:
+        """Get AI-recommended resources for a specific topic."""
+        # This implementation uses the database search via semantic similarity or keyword matching
+        # Since we don't have vector embeddings yet, we'll use keyword matching via Supabase
+        
+        from supabase_db import get_resources
+        
+        # 1. First, get resources matching the subject and grade
+        resources = get_resources(
+            subject=subject,
+            grade_level=grade_level,
+            limit=20 # Fetch a pool to rank
+        )
+        
+        if not resources:
+            return []
+            
+        # 2. If we have a topic, use LLM to rank relevance (optional) or simple keyword filtering
+        # For simplicity and speed, we'll do simple keyword matching first
+        topic_lower = topic.lower()
+        ranked_resources = []
+        
+        for res in resources:
+            score = 0
+            # Basic scoring based on text overlap
+            title_lower = res.get('title', '').lower()
+            desc_lower = res.get('description', '').lower()
+            tags = [t.lower() for t in res.get('tags', [])]
+            
+            if topic_lower in title_lower:
+                score += 10
+            if topic_lower in desc_lower:
+                score += 5
+            if any(t in topic_lower or topic_lower in t for t in tags):
+                score += 8
+                
+            if score > 0:
+                ranked_resources.append((score, res))
+                
+        # Sort by score descending
+        ranked_resources.sort(key=lambda x: x[0], reverse=True)
+        
+        # Return top 3 resources
+        return [r[1] for r in ranked_resources[:3]]
+
     # ==================== ACADEMIC FEEDBACK ====================
     
     async def generate_academic_feedback(

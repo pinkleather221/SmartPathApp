@@ -33,6 +33,9 @@ import Insights from "./pages/Insights";
 import InsightDetail from "./pages/InsightDetail";
 import MathSolver from "./pages/MathSolver";
 import AiTutor from "./pages/AiTutor";
+import ResourceLibrary from "./pages/ResourceLibrary";
+import ResourceDetail from "./pages/ResourceDetail";
+import AdminResourceManage from "./pages/AdminResourceManage";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 import RoleBasedDashboard from "./components/RoleBasedDashboard";
@@ -85,6 +88,9 @@ const App = () => (
             <Route path="/insights/:id" element={<ProtectedRoute><InsightDetail /></ProtectedRoute>} />
             <Route path="/math-solver" element={<ProtectedRoute><MathSolver /></ProtectedRoute>} />
             <Route path="/ai-tutor" element={<ProtectedRoute><AiTutor /></ProtectedRoute>} />
+            <Route path="/resources" element={<ProtectedRoute><ResourceLibrary /></ProtectedRoute>} />
+            <Route path="/resources/:id" element={<ProtectedRoute><ResourceDetail /></ProtectedRoute>} />
+            <Route path="/admin/resources" element={<ProtectedRoute><AdminResourceManage /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />

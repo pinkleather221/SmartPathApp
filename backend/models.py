@@ -567,6 +567,71 @@ class AcademicFeedback(BaseModel):
     motivational_message: str
     next_steps: List[str]
 
+# ==================== RESOURCE LIBRARY MODELS ====================
+
+class ResourceType(str, Enum):
+    PDF = "pdf"
+    VIDEO = "video"
+    NOTE = "note"
+    TOOLKIT = "toolkit"
+
+class ResourceCreate(BaseModel):
+    """Create a new curated resource."""
+    title: str = Field(..., min_length=2, max_length=200)
+    description: Optional[str] = None
+    subject: str = Field(..., min_length=2, max_length=100)
+    grade_level: Optional[int] = Field(None, ge=3, le=12)
+    type: ResourceType = ResourceType.PDF
+    tags: Optional[List[str]] = None
+    content_url: str = Field(..., min_length=5)
+    thumbnail_url: Optional[str] = None
+    source: Optional[str] = None
+    is_curated: bool = True
+
+class ResourceUpdate(BaseModel):
+    """Update curated resource fields."""
+    title: Optional[str] = Field(None, min_length=2, max_length=200)
+    description: Optional[str] = None
+    subject: Optional[str] = Field(None, min_length=2, max_length=100)
+    grade_level: Optional[int] = Field(None, ge=3, le=12)
+    type: Optional[ResourceType] = None
+    tags: Optional[List[str]] = None
+    content_url: Optional[str] = Field(None, min_length=5)
+    thumbnail_url: Optional[str] = None
+    source: Optional[str] = None
+    is_curated: Optional[bool] = None
+
+class ResourceResponse(BaseModel):
+    """Resource response model."""
+    resource_id: int
+    title: str
+    description: Optional[str]
+    subject: str
+    grade_level: Optional[int]
+    type: ResourceType
+    tags: Optional[List[str]]
+    content_url: str
+    thumbnail_url: Optional[str]
+    source: Optional[str]
+    is_curated: bool
+    created_at: datetime
+    updated_at: Optional[datetime]
+    views: int = 0
+    downloads: int = 0
+    likes: int = 0
+    is_favorite: bool = False
+    
+    model_config = {"from_attributes": True}
+
+class ResourceQuery(BaseModel):
+    """Query filters for resources."""
+    q: Optional[str] = None
+    subject: Optional[str] = None
+    grade_level: Optional[int] = None
+    type: Optional[ResourceType] = None
+    page: int = 1
+    page_size: int = 20
+
 
 # ==================== COMMON MODELS ====================
 

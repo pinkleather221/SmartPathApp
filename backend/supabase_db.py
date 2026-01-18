@@ -203,6 +203,111 @@ def delete_flashcard(card_id: int, user_id: int) -> bool:
         return False
 
 
+# ==================== RESOURCES ====================
+
+def create_resource(resource: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Create a new resource."""
+    try:
+        resource["created_at"] = datetime.utcnow().isoformat()
+        response = supabase.table('resources').insert(resource).execute()
+        return response.data[0] if response.data else None
+    except Exception as e:
+        logger.error(f"Error creating resource: {e}")
+        return None
+
+def update_resource(resource_id: int, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Update a resource."""
+    try:
+        data["updated_at"] = datetime.utcnow().isoformat()
+        response = supabase.table('resources').update(data).eq('resource_id', resource_id).execute()
+        return response.data[0] if response.data else None
+    except Exception as e:
+        logger.error(f"Error updating resource {resource_id}: {e}")
+        return None
+
+def delete_resource(resource_id: int) -> bool:
+    """Delete a resource."""
+    try:
+        response = supabase.table('resources').delete().eq('resource_id', resource_id).execute()
+        return len(response.data) > 0
+    except Exception as e:
+        logger.error(f"Error deleting resource {resource_id}: {e}")
+        return False
+
+def get_resource(resource_id: int, user_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
+    """Get a single resource. Includes is_favorite if user_id provided."""
+    try:
+        resp = supabase.table('resources').select('*').eq('resource_id', resource_id).limit(1).execute()
+        resource = resp.data[0] if resp.data else None
+        if not resource:
+            return None
+        if user_id:
+            fav = supabase.table('resource_favorites').select('resource_id').eq('user_id', user_id).eq('resource_id', resource_id).execute()
+            resource["is_favorite"] = len(fav.data) > 0
+        else:
+            resource["is_favorite"] = False
+        return resource
+    except Exception as e:
+        logger.error(f"Error getting resource {resource_id}: {e}")
+        return None
+
+def list_resources(filters: Dict[str, Any], user_id: Optional[int] = None, page: int = 1, page_size: int = 20) -> Dict[str, Any]:
+    """List resources with filters."""
+    try:
+        query = supabase.table('resources').select('*')
+        if filters.get("subject"):
+            query = query.ilike('subject', f'%{filters["subject"]}%')
+        if filters.get("grade_level") is not None:
+            query = query.eq('grade_level', filters["grade_level"])
+        if filters.get("type"):
+            query = query.eq('type', filters["type"])
+        if filters.get("q"):
+            q = filters["q"]
+            # Search in title and description
+            # Supabase supports ilike chained with or via rpc; here do simple title filter then client-side merge
+            query = query.or_(f"title.ilike.%{q}%,description.ilike.%{q}%")  # requires PostgREST or_ syntax
+        # Pagination
+        offset = (page - 1) * page_size
+        query = query.range(offset, offset + page_size - 1)
+        resp = query.order('created_at', desc=True).execute()
+        items = resp.data or []
+        total_resp = supabase.table('resources').select('resource_id', count='exact').execute()
+        total = total_resp.count or len(items)
+        if user_id:
+            fav_ids = supabase.table('resource_favorites').select('resource_id').eq('user_id', user_id).execute()
+            fav_set = set([r['resource_id'] for r in fav_ids.data])
+            for it in items:
+                it["is_favorite"] = it['resource_id'] in fav_set
+        else:
+            for it in items:
+                it["is_favorite"] = False
+        return {"items": items, "total": total, "page": page, "page_size": page_size}
+    except Exception as e:
+        logger.error(f"Error listing resources: {e}")
+        return {"items": [], "total": 0, "page": page, "page_size": page_size}
+
+def favorite_resource(user_id: int, resource_id: int) -> bool:
+    """Favorite a resource."""
+    try:
+        supabase.table('resource_favorites').insert({
+            "user_id": user_id,
+            "resource_id": resource_id,
+            "created_at": datetime.utcnow().isoformat()
+        }).execute()
+        return True
+    except Exception as e:
+        logger.error(f"Error favoriting resource {resource_id} for user {user_id}: {e}")
+        return False
+
+def unfavorite_resource(user_id: int, resource_id: int) -> bool:
+    """Remove favorite."""
+    try:
+        resp = supabase.table('resource_favorites').delete().eq('user_id', user_id).eq('resource_id', resource_id).execute()
+        return len(resp.data) > 0
+    except Exception as e:
+        logger.error(f"Error unfavoriting resource {resource_id} for user {user_id}: {e}")
+        return False
+
 # ==================== FLASHCARD REVIEWS ====================
 
 def create_flashcard_review(review_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:

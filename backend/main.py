@@ -35,7 +35,8 @@ from models import (
     MessageResponse, ErrorResponse, PaginatedResponse,
     InviteCodeResponse, InviteCodeRedeem, LinkedStudentResponse, LinkedGuardianResponse,
     StudentDashboardResponse, GuardianInsightCreate, PriorityLevel,
-    ChatRequest, MessageResponse
+    ChatRequest, MessageResponse,
+    ResourceCreate, ResourceUpdate, ResourceResponse, ResourceQuery
 )
 from pydantic import BaseModel, EmailStr
 
@@ -56,7 +57,9 @@ from auth import (
 from supabase_db import (
     get_user_by_email, create_user, get_user_insights, delete_academic_report,
     delete_flashcard, update_career_recommendation, delete_career_recommendation,
-    delete_study_plan
+    delete_study_plan,
+    create_resource, update_resource, delete_resource, get_resource, list_resources,
+    favorite_resource, unfavorite_resource
 )
 from services import (
     ReportService, PerformanceService, FlashcardService,
@@ -297,6 +300,91 @@ async def reset_password(
     })
     
     return {"message": "Password reset successfully. You can now login."}
+
+# ==================== RESOURCE LIBRARY ROUTES ====================
+
+@app.get(f"{settings.API_V1_PREFIX}/resources", response_model=PaginatedResponse)
+def get_resources(
+    q: Optional[str] = None,
+    subject: Optional[str] = None,
+    grade_level: Optional[int] = None,
+    type: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 20,
+    current_user: Optional[Dict[str, Any]] = Depends(get_current_active_user)
+):
+    filters = {"q": q, "subject": subject, "grade_level": grade_level, "type": type}
+    data = list_resources(filters, user_id=current_user.get("user_id") if current_user else None, page=page, page_size=page_size)
+    return PaginatedResponse(
+        items=[ResourceResponse.model_validate(item) for item in data["items"]],
+        total=data["total"],
+        page=data["page"],
+        page_size=data["page_size"],
+        total_pages=(data["total"] + page_size - 1) // page_size
+    )
+
+@app.get(f"{settings.API_V1_PREFIX}/resources/{{resource_id}}", response_model=ResourceResponse)
+def get_resource_detail(
+    resource_id: int,
+    current_user: Optional[Dict[str, Any]] = Depends(get_current_active_user)
+):
+    resource = get_resource(resource_id, user_id=current_user.get("user_id") if current_user else None)
+    if not resource:
+        raise HTTPException(status_code=404, detail="Resource not found")
+    return ResourceResponse.model_validate(resource)
+
+@app.post(f"{settings.API_V1_PREFIX}/resources", response_model=ResourceResponse)
+def create_resource_item(
+    payload: ResourceCreate,
+    admin_user: Dict[str, Any] = Depends(require_user_type("admin"))
+):
+    data = payload.model_dump()
+    created = create_resource(data)
+    if not created:
+        raise HTTPException(status_code=500, detail="Failed to create resource")
+    return ResourceResponse.model_validate(created)
+
+@app.put(f"{settings.API_V1_PREFIX}/resources/{{resource_id}}", response_model=ResourceResponse)
+def update_resource_item(
+    resource_id: int,
+    payload: ResourceUpdate,
+    admin_user: Dict[str, Any] = Depends(require_user_type("admin"))
+):
+    data = {k: v for k, v in payload.model_dump().items() if v is not None}
+    updated = update_resource(resource_id, data)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Resource not found or update failed")
+    return ResourceResponse.model_validate(updated)
+
+@app.delete(f"{settings.API_V1_PREFIX}/resources/{{resource_id}}", response_model=MessageResponse)
+def delete_resource_item(
+    resource_id: int,
+    admin_user: Dict[str, Any] = Depends(require_user_type("admin"))
+):
+    ok = delete_resource(resource_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Resource not found or delete failed")
+    return MessageResponse(message="Resource deleted", success=True)
+
+@app.post(f"{settings.API_V1_PREFIX}/resources/{{resource_id}}/favorite", response_model=MessageResponse)
+def favorite_resource_item(
+    resource_id: int,
+    current_user: Dict[str, Any] = Depends(get_current_active_user)
+):
+    ok = favorite_resource(current_user["user_id"], resource_id)
+    if not ok:
+        raise HTTPException(status_code=500, detail="Failed to favorite resource")
+    return MessageResponse(message="Favorited", success=True)
+
+@app.delete(f"{settings.API_V1_PREFIX}/resources/{{resource_id}}/favorite", response_model=MessageResponse)
+def unfavorite_resource_item(
+    resource_id: int,
+    current_user: Dict[str, Any] = Depends(get_current_active_user)
+):
+    ok = unfavorite_resource(current_user["user_id"], resource_id)
+    if not ok:
+        raise HTTPException(status_code=500, detail="Failed to remove favorite")
+    return MessageResponse(message="Unfavorited", success=True)
 
 @app.get(f"{settings.API_V1_PREFIX}/auth/profile", response_model=UserProfile)
 async def get_profile(current_user: Dict[str, Any] = Depends(get_current_active_user)):

@@ -16,6 +16,7 @@ import {
   Menu,
   Calculator,
   Bot,
+  BookOpen,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -45,6 +46,7 @@ const studentNavigation = [
   { name: "Study Plans", href: "/study-plans", icon: Calendar },
   { name: "Math Solver", href: "/math-solver", icon: Calculator },
   { name: "AI Tutor", href: "/ai-tutor", icon: Bot },
+  { name: "Resources", href: "/resources", icon: BookOpen },
   { name: "Insights", href: "/insights", icon: Lightbulb },
   { name: "Settings", href: "/settings", icon: Settings },
 ];
