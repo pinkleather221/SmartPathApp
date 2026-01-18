@@ -38,6 +38,44 @@ class LLMService:
         content = f"{prompt}{json.dumps(context, sort_keys=True)}"
         return hashlib.md5(content.encode()).hexdigest()
     
+    # ==================== MATH SOLVER ROUTES ====================
+
+    async def generate_practice_problems(
+        self,
+        subject: str,
+        topic: str,
+        grade_level: int,
+        count: int = 3,
+        difficulty: str = "medium"
+    ) -> List[Dict[str, str]]:
+        """Generate practice math problems based on a solved topic."""
+        if not self.client_available:
+            return []
+            
+        prompt = f"""Generate {count} practice math problems for a Grade {grade_level} student on the topic: {topic} ({subject}).
+        Difficulty: {difficulty}
+        
+        Return ONLY a JSON array of objects. Each object must have:
+        - "problem": The question text (use LaTeX for math)
+        - "solution": Step-by-step solution (use LaTeX)
+        - "answer": The final answer
+        
+        Example format:
+        [
+          {{
+            "problem": "Solve for x: $2x + 5 = 15$",
+            "solution": "Subtract 5 from both sides: $2x = 10$. Divide by 2: $x = 5$.",
+            "answer": "x = 5"
+          }}
+        ]"""
+        
+        try:
+            response = await self.generate(prompt, json_mode=True)
+            return json.loads(response)
+        except Exception as e:
+            logger.error(f"Practice problem generation error: {e}")
+            return []
+
     async def solve_math_problem(
         self,
         problem_text: Optional[str] = None,
@@ -405,22 +443,52 @@ Be specific, constructive, and culturally appropriate for Kenyan students."""
         message: str,
         history: List[Dict[str, str]],
         subject: Optional[str] = None,
-        grade_level: Optional[int] = None
+        grade_level: Optional[int] = None,
+        context_type: Optional[str] = None # "writing", "planning", "general"
     ) -> str:
         """Chat with AI Tutor."""
         if not self.client_available:
             return "AI service is currently unavailable. Please configure GEMINI_API_KEY."
             
-        system_prompt = (
+        base_instruction = (
             "You are a friendly and knowledgeable AI Tutor for SmartPath, an app for Kenyan high school students. "
-            "Your goal is to help students learn and understand concepts, not just give answers. "
             f"{f'The student is in Grade {grade_level}. ' if grade_level else ''}"
             f"{f'Current subject context: {subject}. ' if subject else ''}"
-            "Use simple language. Explain concepts clearly. "
-            "Encourage critical thinking. "
-            "If asked about Kenyan curriculum (8-4-4 or CBC), be accurate. "
-            "Use Markdown for formatting. Use LaTeX for math ($...$)."
         )
+
+        if context_type == "writing":
+            specific_instruction = (
+                "Role: Writing Assistant. "
+                "Help the student improve their essays, reports, or creative writing. "
+                "Focus on structure, clarity, grammar, and vocabulary. "
+                "Do NOT write the essay for them. Instead, provide outlines, feedback on specific paragraphs, "
+                "suggest better word choices, or explain grammatical rules. "
+                "Encourage their own voice."
+            )
+        elif context_type == "planning":
+             specific_instruction = (
+                "Role: Study Planner & Optimizer. "
+                "Help the student organize their study sessions. "
+                "Suggest optimal times for difficult subjects based on their energy levels (e.g., math in the morning). "
+                "Recommend break intervals (Pomodoro). "
+                "Help them prioritize tasks based on upcoming exams or weak areas. "
+                "Be motivating and practical."
+            )
+        else:
+            specific_instruction = (
+                "Role: General Academic Tutor. "
+                "Goal: Help students learn and understand concepts, not just give answers. "
+                "Use simple language. Explain concepts clearly. "
+                "Encourage critical thinking. "
+                "If asked about Kenyan curriculum (8-4-4 or CBC), be accurate. "
+                "Use Markdown for formatting. Use LaTeX for math ($...$). "
+                "IMPORTANT: You are strictly an academic tutor. "
+                "If the user asks about non-academic topics (e.g., entertainment, gossip, politics, personal advice), "
+                "politely decline and steer the conversation back to studies. "
+                "Do not write essays or do homework *for* the student; guide them to the solution instead."
+            )
+
+        system_prompt = f"{base_instruction} {specific_instruction}"
 
         # Convert history to Gemini format
         # Gemini expects [{'role': 'user'|'model', 'parts': [...]}]

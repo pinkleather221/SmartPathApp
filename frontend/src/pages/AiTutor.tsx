@@ -25,6 +25,7 @@ const AiTutor = () => {
     { role: "model", content: "Hello! I'm your AI Tutor. How can I help you with your studies today?" }
   ]);
   const [isLoading, setIsLoading] = useState(false);
+  const [activeContext, setActiveContext] = useState<"general" | "writing" | "planning">("general");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -50,7 +51,7 @@ const AiTutor = () => {
       // API expects "model" or "user" roles.
       const history = messages.map(m => ({ role: m.role, content: m.content }));
       
-      const response = await chatApi.send(userMessage, history);
+      const response = await chatApi.send(userMessage, history, undefined, activeContext);
       
       setMessages(prev => [...prev, { role: "model", content: response.message }]);
     } catch (error) {
@@ -70,14 +71,39 @@ const AiTutor = () => {
     <DashboardLayout>
       <div className="flex flex-col h-[calc(100vh-4rem)] max-w-5xl mx-auto w-full">
         {/* Header */}
-        <div className="flex items-center gap-3 p-4 border-b bg-card/50 backdrop-blur-sm z-10">
-          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-            <Bot className="w-6 h-6 text-primary" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold">AI Tutor Assistant</h1>
-            <p className="text-xs text-muted-foreground">24/7 Homework Help & Study Guide</p>
-          </div>
+        <div className="flex items-center justify-between gap-3 p-4 border-b bg-card/50 backdrop-blur-sm z-10">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                <Bot className="w-6 h-6 text-primary" />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold">AI Tutor Assistant</h1>
+                <p className="text-xs text-muted-foreground">24/7 Homework Help & Study Guide</p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+                <Button 
+                    variant={activeContext === "general" ? "default" : "outline"} 
+                    size="sm"
+                    onClick={() => setActiveContext("general")}
+                >
+                    General
+                </Button>
+                <Button 
+                    variant={activeContext === "writing" ? "default" : "outline"} 
+                    size="sm"
+                    onClick={() => setActiveContext("writing")}
+                >
+                    Writing Helper
+                </Button>
+                <Button 
+                    variant={activeContext === "planning" ? "default" : "outline"} 
+                    size="sm"
+                    onClick={() => setActiveContext("planning")}
+                >
+                    Study Planner
+                </Button>
+            </div>
         </div>
 
         {/* Chat Area */}

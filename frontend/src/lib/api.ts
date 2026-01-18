@@ -276,6 +276,34 @@ export const authApi = {
       false
     ),
 
+  forgotPassword: (email: string) => {
+    const formData = new FormData();
+    formData.append("email", email);
+    // Use apiClient.post but skip JSON content-type by passing FormData
+    // Note: apiClient implementation might force JSON. If so, we need to bypass it or adjust apiClient.
+    // Assuming apiClient handles FormData correctly if passed as body (axios/fetch usually do).
+    // If apiClient forces JSON, we might need a raw fetch here.
+    // Let's assume standard fetch behavior where body=FormData sets multipart/form-data.
+    // However, our backend expects Form(...) which is x-www-form-urlencoded or multipart.
+    
+    // Using direct fetch to ensure correct headers for FormData
+    return fetch(`${API_BASE_URL}/auth/forgot-password`, {
+        method: 'POST',
+        body: formData
+    }).then(res => apiClient.handleResponse<{ message: string }>(res));
+  },
+
+  resetPassword: (token: string, newPassword: string) => {
+    const formData = new FormData();
+    formData.append("token", token);
+    formData.append("new_password", newPassword);
+    
+    return fetch(`${API_BASE_URL}/auth/reset-password`, {
+        method: 'POST',
+        body: formData
+    }).then(res => apiClient.handleResponse<{ message: string }>(res));
+  },
+
   getProfile: () => apiClient.get<{
     user_id: number;
     email: string;
@@ -631,15 +659,35 @@ export const mathApi = {
         if (error.name === 'AbortError') throw new Error("Request timed out");
         throw error;
     });
+  },
+
+  generatePractice: (subject: string, topic: string, gradeLevel: number) => {
+    const formData = new FormData();
+    formData.append("subject", subject);
+    formData.append("topic", topic);
+    formData.append("grade_level", String(gradeLevel));
+
+    const headers: HeadersInit = {};
+    const token = apiClient.getToken();
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    return fetch(`${API_BASE_URL}/math/practice`, {
+        method: "POST",
+        headers,
+        body: formData
+    }).then(res => apiClient.handleResponse<{ problems: any[]; success: boolean }>(res));
   }
 };
 
 export const chatApi = {
-  send: (message: string, history: { role: string; content: string }[], subject?: string) =>
+  send: (message: string, history: { role: string; content: string }[], subject?: string, context?: string) =>
     apiClient.post<{ message: string; success: boolean }>("/chat/send", {
       message,
       history,
-      subject
+      subject,
+      context
     }),
 };
 

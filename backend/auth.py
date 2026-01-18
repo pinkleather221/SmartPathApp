@@ -11,8 +11,14 @@ from supabase_db import get_user_by_id, get_user_by_email
 # Password hashing context
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+import secrets
+
 # OAuth2 scheme
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_PREFIX}/auth/login", auto_error=False)
+
+def generate_reset_token() -> str:
+    """Generate a secure password reset token."""
+    return secrets.token_urlsafe(32)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:

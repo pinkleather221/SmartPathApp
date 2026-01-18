@@ -33,7 +33,7 @@ const Index = () => {
 
   return (
     <div className="relative min-h-screen w-full bg-gradient-to-br from-background via-muted to-background overflow-hidden">
-      {isDark && (
+      {/* {isDark && (
         <div className="pointer-events-none absolute inset-0 opacity-80">
           <Galaxy
             mouseRepulsion={true}
@@ -44,7 +44,7 @@ const Index = () => {
             hueShift={240}
           />
         </div>
-      )}
+      )} */}
       {/* Header */}
       <header className="border-b border-border/50 bg-card/50 backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
@@ -135,77 +135,127 @@ const Index = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <SpotlightCard
-            className="custom-spotlight-card p-6 rounded-2xl bg-card border border-border hover:shadow-lg transition-shadow"
-            spotlightColor="rgba(0, 229, 255, 0.2)"
-          >
-            {/* <div className="p-6 rounded-2xl bg-card border border-border hover:shadow-lg transition-shadow"> */}
-            <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4">
-              <TrendingUp className="w-6 h-6 text-primary" />
-            </div>
-            <h3 className="text-xl font-semibold text-foreground mb-2">
-              Performance Tracking
-            </h3>
-            <p className="text-muted-foreground">
-              Monitor your grades, identify strengths and weaknesses, and track
-              your progress over time.
-            </p>
-            {/* </div> */}
-          </SpotlightCard>
+          {isDark ? (
+            <>
+              <SpotlightCard
+                className="custom-spotlight-card p-6 rounded-2xl bg-card border border-border hover:shadow-lg transition-shadow"
+                spotlightColor="rgba(0, 229, 255, 0.2)"
+              >
+                <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4">
+                  <TrendingUp className="w-6 h-6 text-primary" />
+                </div>
+                <h3 className="text-xl font-semibold text-foreground mb-2">
+                  Performance Tracking
+                </h3>
+                <p className="text-muted-foreground">
+                  Monitor your grades, identify strengths and weaknesses, and track
+                  your progress over time.
+                </p>
+              </SpotlightCard>
 
-          <SpotlightCard
-            className="custom-spotlight-card p-6 rounded-2xl bg-card border border-border hover:shadow-lg transition-shadow"
-            spotlightColor="rgba(0, 229, 255, 0.2)"
-          >
-            {/* <div className="p-6 rounded-2xl bg-card border border-border hover:shadow-lg transition-shadow"> */}
-            <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center mb-4">
-              <Brain className="w-6 h-6 text-accent" />
-            </div>
-            <h3 className="text-xl font-semibold text-foreground mb-2">
-              Smart Flashcards
-            </h3>
-            <p className="text-muted-foreground">
-              AI-generated flashcards tailored to your subjects with instant
-              feedback on your answers.
-            </p>
-            {/* </div> */}
-          </SpotlightCard>
+              <SpotlightCard
+                className="custom-spotlight-card p-6 rounded-2xl bg-card border border-border hover:shadow-lg transition-shadow"
+                spotlightColor="rgba(0, 229, 255, 0.2)"
+              >
+                <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center mb-4">
+                  <Brain className="w-6 h-6 text-accent" />
+                </div>
+                <h3 className="text-xl font-semibold text-foreground mb-2">
+                  Smart Flashcards
+                </h3>
+                <p className="text-muted-foreground">
+                  AI-generated flashcards tailored to your subjects with instant
+                  feedback on your answers.
+                </p>
+              </SpotlightCard>
 
-          <SpotlightCard
-            className="custom-spotlight-card p-6 rounded-2xl bg-card border border-border hover:shadow-lg transition-shadow"
-            spotlightColor="rgba(0, 229, 255, 0.2)"
-          >
-            {/* <div className="p-6 rounded-2xl bg-card border border-border hover:shadow-lg transition-shadow"> */}
-            <div className="w-12 h-12 rounded-xl bg-secondary/10 flex items-center justify-center mb-4">
-              <Compass className="w-6 h-6 text-secondary" />
-            </div>
-            <h3 className="text-xl font-semibold text-foreground mb-2">
-              Career Guidance
-            </h3>
-            <p className="text-muted-foreground">
-              Get personalized career recommendations based on your interests
-              and academic performance.
-            </p>
-            {/* </div> */}
-          </SpotlightCard>
+              <SpotlightCard
+                className="custom-spotlight-card p-6 rounded-2xl bg-card border border-border hover:shadow-lg transition-shadow"
+                spotlightColor="rgba(0, 229, 255, 0.2)"
+              >
+                <div className="w-12 h-12 rounded-xl bg-secondary/10 flex items-center justify-center mb-4">
+                  <Compass className="w-6 h-6 text-secondary" />
+                </div>
+                <h3 className="text-xl font-semibold text-foreground mb-2">
+                  Career Guidance
+                </h3>
+                <p className="text-muted-foreground">
+                  Get personalized career recommendations based on your interests
+                  and academic performance.
+                </p>
+              </SpotlightCard>
 
-          <SpotlightCard
-            className="custom-spotlight-card p-6 rounded-2xl bg-card border border-border hover:shadow-lg transition-shadow"
-            spotlightColor="rgba(0, 229, 255, 0.2)"
-          >
-            {/* <div className="p-6 rounded-2xl bg-card border border-border hover:shadow-lg transition-shadow"> */}
-            <div className="w-12 h-12 rounded-xl bg-info/10 flex items-center justify-center mb-4">
-              <GraduationCap className="w-6 h-6 text-info" />
-            </div>
-            <h3 className="text-xl font-semibold text-foreground mb-2">
-              Study Plans
-            </h3>
-            <p className="text-muted-foreground">
-              AI-generated study schedules optimized for your goals and
-              available time.
-            </p>
-            {/* </div> */}
-          </SpotlightCard>
+              <SpotlightCard
+                className="custom-spotlight-card p-6 rounded-2xl bg-card border border-border hover:shadow-lg transition-shadow"
+                spotlightColor="rgba(0, 229, 255, 0.2)"
+              >
+                <div className="w-12 h-12 rounded-xl bg-info/10 flex items-center justify-center mb-4">
+                  <GraduationCap className="w-6 h-6 text-info" />
+                </div>
+                <h3 className="text-xl font-semibold text-foreground mb-2">
+                  Study Plans
+                </h3>
+                <p className="text-muted-foreground">
+                  AI-generated study schedules optimized for your goals and
+                  available time.
+                </p>
+              </SpotlightCard>
+            </>
+          ) : (
+            <>
+              <div className="p-6 rounded-2xl bg-card border border-border hover:shadow-lg transition-shadow">
+                <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4">
+                  <TrendingUp className="w-6 h-6 text-primary" />
+                </div>
+                <h3 className="text-xl font-semibold text-foreground mb-2">
+                  Performance Tracking
+                </h3>
+                <p className="text-muted-foreground">
+                  Monitor your grades, identify strengths and weaknesses, and track
+                  your progress over time.
+                </p>
+              </div>
+
+              <div className="p-6 rounded-2xl bg-card border border-border hover:shadow-lg transition-shadow">
+                <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center mb-4">
+                  <Brain className="w-6 h-6 text-accent" />
+                </div>
+                <h3 className="text-xl font-semibold text-foreground mb-2">
+                  Smart Flashcards
+                </h3>
+                <p className="text-muted-foreground">
+                  AI-generated flashcards tailored to your subjects with instant
+                  feedback on your answers.
+                </p>
+              </div>
+
+              <div className="p-6 rounded-2xl bg-card border border-border hover:shadow-lg transition-shadow">
+                <div className="w-12 h-12 rounded-xl bg-secondary/10 flex items-center justify-center mb-4">
+                  <Compass className="w-6 h-6 text-secondary" />
+                </div>
+                <h3 className="text-xl font-semibold text-foreground mb-2">
+                  Career Guidance
+                </h3>
+                <p className="text-muted-foreground">
+                  Get personalized career recommendations based on your interests
+                  and academic performance.
+                </p>
+              </div>
+
+              <div className="p-6 rounded-2xl bg-card border border-border hover:shadow-lg transition-shadow">
+                <div className="w-12 h-12 rounded-xl bg-info/10 flex items-center justify-center mb-4">
+                  <GraduationCap className="w-6 h-6 text-info" />
+                </div>
+                <h3 className="text-xl font-semibold text-foreground mb-2">
+                  Study Plans
+                </h3>
+                <p className="text-muted-foreground">
+                  AI-generated study schedules optimized for your goals and
+                  available time.
+                </p>
+              </div>
+            </>
+          )}
         </div>
       </section>
 
@@ -214,7 +264,7 @@ const Index = () => {
         <div className="max-w-4xl mx-auto bg-gradient-to-r from-primary to-primary-light rounded-3xl p-12 text-center text-white shadow-xl">
           <h2 className="text-3xl lg:text-4xl font-bold mb-4">
             Ready to Transform Your Learning?
-          </h2>
+          </h2> 
           <p className="text-lg opacity-90 mb-8 max-w-2xl mx-auto">
             Join thousands of students already using SmartPath to achieve their
             academic goals.

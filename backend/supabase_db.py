@@ -29,6 +29,16 @@ def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
         logger.error(f"Error getting user by email {email}: {e}")
         return None
 
+def get_user_by_reset_token(token: str) -> Optional[Dict[str, Any]]:
+    """Get user by valid reset token."""
+    try:
+        now = datetime.utcnow().isoformat()
+        response = supabase.table('users').select('*').eq('reset_token', token).gt('reset_token_expires', now).execute()
+        return response.data[0] if response.data else None
+    except Exception as e:
+        logger.error(f"Error getting user by reset token: {e}")
+        return None
+
 def create_user(user_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Create a new user."""
     try:

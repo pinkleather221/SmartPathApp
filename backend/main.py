@@ -37,7 +37,7 @@ from models import (
     StudentDashboardResponse, GuardianInsightCreate, PriorityLevel,
     ChatRequest, MessageResponse
 )
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 
 def _convert_priority_to_int(priority: PriorityLevel) -> int:
     """Converts PriorityLevel enum to an integer for database storage."""
@@ -181,8 +181,10 @@ async def health_check():
 # ==================== AUTHENTICATION ROUTES ====================
 
 @app.post(f"{settings.API_V1_PREFIX}/auth/register", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
-def register(user_data: UserRegister):
+async def register(user_data: UserRegister):
     """Register a new user."""
+    from email_service import email_service
+    
     # Check if user exists
     existing_user = get_user_by_email(user_data.email)
     if existing_user:
@@ -210,6 +212,12 @@ def register(user_data: UserRegister):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create user"
         )
+        
+    # Send welcome email
+    try:
+        await email_service.send_welcome_email(user['email'], user['full_name'])
+    except Exception as e:
+        logger.error(f"Failed to send welcome email: {e}")
 
     return MessageResponse(
         message="User registered successfully",
@@ -240,6 +248,55 @@ def login(credentials: UserLogin):
         expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
     )
 
+
+@app.post(f"{settings.API_V1_PREFIX}/auth/forgot-password")
+async def forgot_password(
+    email: EmailStr = Form(...),
+):
+    """Request a password reset email."""
+    from auth import generate_reset_token
+    from email_service import email_service
+    
+    user = get_user_by_email(email)
+    if user:
+        token = generate_reset_token()
+        # Set token expiration to 1 hour
+        expires = (datetime.utcnow() + timedelta(hours=1)).isoformat()
+        
+        # Save token to user record
+        update_user(user['user_id'], {
+            "reset_token": token,
+            "reset_token_expires": expires
+        })
+        
+        # Send email
+        await email_service.send_reset_password_email(email, token)
+        
+    # Always return success to prevent email enumeration
+    return {"message": "If an account exists with this email, a reset link has been sent."}
+
+@app.post(f"{settings.API_V1_PREFIX}/auth/reset-password")
+async def reset_password(
+    token: str = Form(...),
+    new_password: str = Form(...)
+):
+    """Reset password with a valid token."""
+    from auth import get_password_hash
+    from supabase_db import get_user_by_reset_token
+    
+    user = get_user_by_reset_token(token)
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+        
+    # Update password and clear token
+    password_hash = get_password_hash(new_password)
+    update_user(user['user_id'], {
+        "password_hash": password_hash,
+        "reset_token": None,
+        "reset_token_expires": None
+    })
+    
+    return {"message": "Password reset successfully. You can now login."}
 
 @app.get(f"{settings.API_V1_PREFIX}/auth/profile", response_model=UserProfile)
 async def get_profile(current_user: Dict[str, Any] = Depends(get_current_active_user)):
@@ -386,6 +443,32 @@ async def solve_math(
         raise HTTPException(status_code=500, detail="Failed to solve math problem")
 
 
+@app.post(f"{settings.API_V1_PREFIX}/math/practice")
+async def generate_math_practice(
+    subject: str = Form(...),
+    topic: str = Form(...),
+    grade_level: int = Form(...),
+    difficulty: str = Form("medium"),
+    count: int = Form(3),
+    current_user: Dict[str, Any] = Depends(get_current_active_user)
+):
+    """Generate practice math problems."""
+    from llm_service import llm_service
+    
+    try:
+        problems = await llm_service.generate_practice_problems(
+            subject=subject,
+            topic=topic,
+            grade_level=grade_level,
+            count=count,
+            difficulty=difficulty
+        )
+        return {"problems": problems, "success": True}
+    except Exception as e:
+        logger.error(f"Math practice route error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate practice problems")
+
+
 # ==================== CHAT ROUTES ====================
 
 @app.post(f"{settings.API_V1_PREFIX}/chat/send")
@@ -409,7 +492,8 @@ async def chat_send(
             message=request.message,
             history=history_dicts,
             subject=request.subject,
-            grade_level=grade_level
+            grade_level=grade_level,
+            context_type=request.context
         )
         
         return {"message": response_text, "success": True}

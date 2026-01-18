@@ -8,6 +8,8 @@ import { GraduationCap, ArrowLeft, Mail } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ModeToggle } from "@/components/mode-toggle";
 
+import { authApi } from "@/lib/api";
+
 const ForgotPassword = () => {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
@@ -18,15 +20,24 @@ const ForgotPassword = () => {
     e.preventDefault();
     setIsLoading(true);
 
-    // Simulate API call
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      await authApi.forgotPassword(email);
       setEmailSent(true);
       toast({
         title: "Reset link sent!",
-        description: "Check your email for password reset instructions.",
+        description: "If an account exists, you will receive password reset instructions.",
       });
-    }, 1500);
+    } catch (error) {
+        // We don't want to reveal if email exists, so we might show same success message or generic error
+        // But for UX, if it's a network error, we show it.
+        toast({
+            title: "Request failed",
+            description: "Please try again later.",
+            variant: "destructive"
+        });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
