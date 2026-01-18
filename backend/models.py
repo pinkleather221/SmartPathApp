@@ -689,6 +689,22 @@ class GuardianInsightResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# ==================== CHAT MODELS ====================
+
+class ChatMessage(BaseModel):
+    """Chat message model."""
+    role: str  # "user" or "model" (or "assistant")
+    content: str
+
+class ChatRequest(BaseModel):
+    """Chat request model."""
+    message: str
+    history: List[ChatMessage] = []
+    subject: Optional[str] = None
+    grade_level: Optional[int] = None
+    context: Optional[str] = None
+
+
 # ==================== VALIDATORS ====================
 
 def validate_kenyan_grade(grade: str) -> str:

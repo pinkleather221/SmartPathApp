@@ -31,6 +31,7 @@ import StudyPlanDetail from "./pages/StudyPlanDetail";
 import Insights from "./pages/Insights";
 import InsightDetail from "./pages/InsightDetail";
 import MathSolver from "./pages/MathSolver";
+import AiTutor from "./pages/AiTutor";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 import RoleBasedDashboard from "./components/RoleBasedDashboard";
@@ -81,6 +82,7 @@ const App = () => (
             <Route path="/insights" element={<ProtectedRoute><Insights /></ProtectedRoute>} />
             <Route path="/insights/:id" element={<ProtectedRoute><InsightDetail /></ProtectedRoute>} />
             <Route path="/math-solver" element={<ProtectedRoute><MathSolver /></ProtectedRoute>} />
+            <Route path="/ai-tutor" element={<ProtectedRoute><AiTutor /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />

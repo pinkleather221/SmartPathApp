@@ -73,7 +73,7 @@ class LLMService:
                 contents,
                  generation_config=genai.types.GenerationConfig(
                     temperature=0.2, # Low temp for math
-                    max_output_tokens=2048,
+                    max_output_tokens=4096,
                 )
             )
             return response.text
@@ -366,7 +366,7 @@ Be specific, constructive, and culturally appropriate for Kenyan students."""
              return "AI service is currently unavailable. Please configure GEMINI_API_KEY."
 
         system_instruction = (
-            "You are an expert math tutor for Kenyan high school student. "
+            "You are an expert math tutor for Kenyan high school students. "
             "Solve the problem step-by-step. "
             "Explain the logic clearly. "
             "Use LaTeX for mathematical formulas, enclosing them in single dollar signs $...$ for inline and double $$...$$ for block equations. "
@@ -397,6 +397,64 @@ Be specific, constructive, and culturally appropriate for Kenyan students."""
         except Exception as e:
             logger.error(f"Math solver error: {e}")
             return f"Error solving problem: {str(e)}"
+    
+    # ==================== CHAT ASSISTANT ====================
+    
+    async def chat_with_tutor(
+        self,
+        message: str,
+        history: List[Dict[str, str]],
+        subject: Optional[str] = None,
+        grade_level: Optional[int] = None
+    ) -> str:
+        """Chat with AI Tutor."""
+        if not self.client_available:
+            return "AI service is currently unavailable. Please configure GEMINI_API_KEY."
+            
+        system_prompt = (
+            "You are a friendly and knowledgeable AI Tutor for SmartPath, an app for Kenyan high school students. "
+            "Your goal is to help students learn and understand concepts, not just give answers. "
+            f"{f'The student is in Grade {grade_level}. ' if grade_level else ''}"
+            f"{f'Current subject context: {subject}. ' if subject else ''}"
+            "Use simple language. Explain concepts clearly. "
+            "Encourage critical thinking. "
+            "If asked about Kenyan curriculum (8-4-4 or CBC), be accurate. "
+            "Use Markdown for formatting. Use LaTeX for math ($...$)."
+        )
+
+        # Convert history to Gemini format
+        # Gemini expects [{'role': 'user'|'model', 'parts': [...]}]
+        chat_history = []
+        
+        # Add system prompt as the first message or context (Gemini doesn't have system role in chat history usually, but we can prepend it to the first message or use system_instruction in model init if available)
+        # For simple chat history, we'll prepend instructions to the conversation context
+        
+        for msg in history:
+            role = "user" if msg.get("role") in ["user", "student"] else "model"
+            chat_history.append({
+                "role": role,
+                "parts": [msg.get("content", "")]
+            })
+        
+        # Add current message
+        chat_history.append({
+            "role": "user",
+            "parts": [f"System Instructions: {system_prompt}\n\nUser Message: {message}"] if not history else [message]
+        })
+        
+        try:
+            # We use generate_content with the list of messages for stateless chat
+            response = await self.model.generate_content_async(
+                chat_history,
+                generation_config=genai.types.GenerationConfig(
+                    temperature=0.7,
+                    max_output_tokens=4096,
+                )
+            )
+            return response.text
+        except Exception as e:
+            logger.error(f"Chat error: {e}")
+            return "I'm having trouble connecting right now. Please try again."
 
     # ==================== CAREER RECOMMENDATIONS ====================
     

@@ -634,6 +634,15 @@ export const mathApi = {
   }
 };
 
+export const chatApi = {
+  send: (message: string, history: { role: string; content: string }[], subject?: string) =>
+    apiClient.post<{ message: string; success: boolean }>("/chat/send", {
+      message,
+      history,
+      subject
+    }),
+};
+
 // Insight types for guardian-created insights
 export type InsightType = "feedback" | "tip" | "analysis" | "recommendation" | "motivation";
 

@@ -34,7 +34,8 @@ from models import (
     LearningInsightResponse, AcademicFeedback,
     MessageResponse, ErrorResponse, PaginatedResponse,
     InviteCodeResponse, InviteCodeRedeem, LinkedStudentResponse, LinkedGuardianResponse,
-    StudentDashboardResponse, GuardianInsightCreate, PriorityLevel
+    StudentDashboardResponse, GuardianInsightCreate, PriorityLevel,
+    ChatRequest, MessageResponse
 )
 from pydantic import BaseModel
 
@@ -383,6 +384,38 @@ async def solve_math(
     except Exception as e:
         logger.error(f"Math solver route error: {e}")
         raise HTTPException(status_code=500, detail="Failed to solve math problem")
+
+
+# ==================== CHAT ROUTES ====================
+
+@app.post(f"{settings.API_V1_PREFIX}/chat/send")
+async def chat_send(
+    request: ChatRequest,
+    current_user: Dict[str, Any] = Depends(get_current_active_user)
+):
+    """Send a message to the AI Tutor."""
+    from llm_service import llm_service
+    
+    try:
+        # Pass user context (grade level) if not explicitly provided
+        grade_level = request.grade_level
+        if grade_level is None and current_user.get("grade_level"):
+             grade_level = current_user.get("grade_level")
+             
+        # Convert history to dict format for service
+        history_dicts = [{"role": msg.role, "content": msg.content} for msg in request.history]
+        
+        response_text = await llm_service.chat_with_tutor(
+            message=request.message,
+            history=history_dicts,
+            subject=request.subject,
+            grade_level=grade_level
+        )
+        
+        return {"message": response_text, "success": True}
+    except Exception as e:
+        logger.error(f"Chat route error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get response from AI Tutor")
 
 
 # ==================== REPORT ROUTES ====================
