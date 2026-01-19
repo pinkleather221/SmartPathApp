@@ -40,7 +40,10 @@ const GenerateFlashcards = () => {
         count: cardCount[0],
       });
 
-      const previewCards = (cards || []).map((card: any, i: number) => ({
+      // Ensure cards is an array before mapping
+      const cardsArray = Array.isArray(cards) ? cards : (cards as any).cards || [];
+
+      const previewCards = cardsArray.map((card: any, i: number) => ({
         id: card.card_id || card.flashcard_id || `preview-${i}`,
         question: card.question,
         answer: card.answer,

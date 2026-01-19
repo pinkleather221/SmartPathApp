@@ -77,7 +77,7 @@ const AdminResourceManage = () => {
         description: formData.description,
         subject: formData.subject,
         grade_level: parseInt(formData.grade_level),
-        type: formData.type as any,
+        type: formData.type as any, // This is still 'any' but required for casting string to enum type
         tags: formData.tags.split(",").map((t) => t.trim()).filter(Boolean),
         content_url: formData.content_url,
         thumbnail_url: formData.thumbnail_url,
