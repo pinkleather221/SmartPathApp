@@ -98,14 +98,27 @@ class ApiClient {
       throw new Error(text || "Unknown error");
     }
 
+interface ValidationError {
+  loc?: (string | number)[];
+  msg?: string;
+  type?: string;
+}
+
+interface ValidationResponse {
+  detail: ValidationError[];
+}
+
     if (!response.ok) {
       // Handle validation errors (422) which have detailed error structure
       let errorMessage = (data as ApiResponse<T>).message || `Request failed with status ${response.status}`;
-      if (response.status === 422 && (data as any).detail && Array.isArray((data as any).detail)) {
-        const validationErrors = (data as any).detail;
-        errorMessage = validationErrors.map((err: any) =>
-          `${err.loc?.join('.') || 'unknown'}: ${err.msg || 'Unknown error'}`
-        ).join(', ');
+      
+      if (response.status === 422) {
+         const errorData = data as unknown as ValidationResponse;
+         if (errorData.detail && Array.isArray(errorData.detail)) {
+            errorMessage = errorData.detail.map((err) =>
+              `${err.loc?.join('.') || 'unknown'}: ${err.msg || 'Unknown error'}`
+            ).join(', ');
+         }
       } else {
         errorMessage = (data as ApiResponse<T>).detail || errorMessage;
       }
@@ -702,11 +715,19 @@ export const mathApi = {
       headers["Authorization"] = `Bearer ${token}`;
     }
 
+interface MathProblem {
+  problem_text: string;
+  options: string[];
+  correct_answer: string;
+  explanation: string;
+  difficulty: string;
+}
+
     return fetch(`${API_BASE_URL}/math/practice`, {
         method: "POST",
         headers,
         body: formData
-    }).then(res => apiClient.handleResponse<{ problems: any[]; success: boolean }>(res));
+    }).then(res => apiClient.handleResponse<{ problems: MathProblem[]; success: boolean }>(res));
   }
 };
 
@@ -756,6 +777,25 @@ export interface StudentCareer {
   match_score: number;
   reasoning?: string;
   suitable_universities?: string[];
+}
+
+export interface Resource {
+  resource_id: number;
+  title: string;
+  description?: string;
+  subject: string;
+  grade_level?: number;
+  type: "pdf" | "video" | "note" | "toolkit";
+  tags?: string[];
+  content_url: string;
+  thumbnail_url?: string;
+  source?: string;
+  is_curated: boolean;
+  created_at: string;
+  views: number;
+  downloads: number;
+  likes: number;
+  is_favorite: boolean;
 }
 
 export default apiClient;

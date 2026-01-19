@@ -1,7 +1,7 @@
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { resourcesApi } from "@/lib/api";
+import { resourcesApi, Resource } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,7 @@ const ResourceDetail = () => {
   const { id } = useParams();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [resource, setResource] = useState<any | null>(null);
+  const [resource, setResource] = useState<Resource | null>(null);
 
   const load = async () => {
     if (!id) return;

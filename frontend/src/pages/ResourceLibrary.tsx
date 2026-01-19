@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, BookOpen, Star, StarOff, SearchX } from "lucide-react"; // Added SearchX icon
-import { resourcesApi } from "@/lib/api";
+import { resourcesApi, Resource } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "react-router-dom";
 
@@ -28,7 +28,7 @@ const ResourceLibrary = () => {
   const [type, setType] = useState<string | undefined>(undefined);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
-  const [items, setItems] = useState<any[]>([]);
+  const [items, setItems] = useState<Resource[]>([]);
   const [total, setTotal] = useState(0);
   const pageSize = 20;
 
@@ -38,13 +38,25 @@ const ResourceLibrary = () => {
       const res = await resourcesApi.list({ 
         q, 
         subject, 
-        grade_level: grade, 
+        grade: grade, // Corrected from grade_level to grade to match API
         type, 
-        page, 
-        page_size: pageSize 
+        limit: pageSize, // Corrected from page_size to limit
+        offset: (page - 1) * pageSize // Calculated offset
       });
-      setItems(res.items || []);
-      setTotal(res.total || 0);
+      // The API now returns Resource[] directly, not { items, total }
+      // We need to adjust backend to return total count for pagination, 
+      // OR for now, just accept the array.
+      // Since resourcesApi.list returns Promise<Resource[]>:
+      if (Array.isArray(res)) {
+          setItems(res);
+          // Temporary fix: we don't have total count from backend yet with this return type
+          // We'll set total to length * page (approximation) or just length
+          setTotal(res.length); 
+      } else {
+          // Fallback if backend structure differs
+           setItems([]);
+           setTotal(0);
+      }
     } catch (e) {
       toast({ title: "Failed to load resources", variant: "destructive" });
     } finally {
