@@ -21,6 +21,8 @@ class UserType(str, Enum):
 class CurriculumType(str, Enum):
     CBE = "CBE"
     EIGHT_FOUR_FOUR = "8-4-4"
+    KCSE = "kcse"
+    IGCSE = "igcse"
 
 
 class DifficultyLevel(str, Enum):

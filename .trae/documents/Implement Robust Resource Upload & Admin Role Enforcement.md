@@ -1,33 +1,31 @@
-To improve the resource management system and make it production-ready, I will implement robust file uploading, secure storage integration, and proper admin role enforcement.
+To address your concerns about admin security and production storage:
 
-### **1. Backend Enhancements**
-1.  **File Upload Endpoint**:
-    -   Create a dedicated endpoint `POST /api/v1/resources/upload` in `backend/main.py` that handles multipart file uploads.
-    -   Use `shutil` or `aiofiles` to save files securely to the configured `UPLOAD_DIR` (local for now, adaptable to S3/Supabase).
-    -   Generate and return a public URL for the uploaded file.
-    -   Validate file types (PDF, MP4, etc.) and size limits (10MB default).
-2.  **Resource Creation Update**:
-    -   Update the existing `POST /api/v1/resources` endpoint to accept the file URL returned from the upload step.
-    -   Ensure `require_user_type("admin")` is strictly enforced.
-3.  **Role Management**:
-    -   Add a database migration (SQL) or seed script to ensure an admin user exists or can be created easily.
-    -   Verify `auth.py` logic handles the admin role correctly.
+### **1. Admin Security & Credentials**
+-   **Security**: The `/api/v1/resources` write endpoints are already protected by `require_user_type("admin")`. This relies on the JWT token containing the correct user role.
+-   **Credentials**: I will add a **Database Seeding Script** (`backend/seed_admin.py`) that creates a default Super Admin user securely. This ensures you have immediate, secure access without manual database hacking.
+-   **Role Verification**: I will add a strict check in the frontend to redirect non-admin users away from the `/admin/resources` page, in addition to the backend enforcement.
 
-### **2. Frontend Improvements**
-1.  **Admin Upload UI**:
-    -   Update `frontend/src/pages/AdminResourceManage.tsx` to replace the "Content URL" text input with a real file picker.
-    -   Implement a two-step process:
-        1.  Upload file -> Get URL.
-        2.  Submit resource metadata with URL.
-    -   Add progress indicators for the upload.
-2.  **API Client Update**:
-    -   Add `resourcesApi.upload` method to `frontend/src/lib/api.ts` to handle the multipart request.
+### **2. Production Storage Strategy**
+-   **Current (Dev)**: Local filesystem (`./uploads`) served via FastAPI `StaticFiles`.
+-   **Production (Plan)**: Storing user uploads on the app server's disk is **not** scalable or persistent across deployments (e.g., Vercel/Heroku).
+-   **Solution**: I will implement a **Supabase Storage** adapter.
+    -   Files will be uploaded directly to a Supabase Storage bucket (`resource-files`).
+    -   The backend will store the permanent public URL.
+    -   This is cloud-native, scalable, and works perfectly for production.
 
-### **3. Database & Storage**
-1.  **Storage**: Ensure the `uploads` directory is served correctly via `StaticFiles` in `main.py` (already present, but verify path).
-2.  **Schema**: The `resources` table already has `content_url`, so no schema changes are needed for this, but we will ensure valid data is stored.
+### **Revised Implementation Plan**
 
-### **Verification Plan**
--   **Test Upload**: Upload a sample PDF via the admin page and verify it appears in the `uploads` folder.
--   **Test Access**: Verify the file URL is accessible in the browser.
--   **Test Permissions**: Try to upload as a "student" user and confirm it fails (403 Forbidden).
+#### **Phase 1: Secure Admin Access**
+1.  **Seed Script**: Create `backend/seed_admin.py` to generate an admin user (`admin@smartpath.app` / secure password).
+2.  **Frontend Protection**: Add a `RequireAdmin` wrapper component to secure the route client-side.
+
+#### **Phase 2: Cloud Storage (Supabase)**
+1.  **Storage Service**: Create `backend/storage_service.py` with an abstract interface.
+    -   Implement `SupabaseStorageProvider` (preferred for prod).
+    -   Keep `LocalStorageProvider` for dev fallback.
+2.  **Upload Endpoint**: Implement `POST /api/v1/resources/upload` that delegates to the active storage provider.
+
+#### **Phase 3: Frontend Integration**
+1.  **File Upload**: Update `AdminResourceManage.tsx` to upload the file first, get the Supabase URL, then create the resource record.
+
+This approach solves the security question (seeded admin + strict role checks) and the production storage question (offloading to Supabase Storage).

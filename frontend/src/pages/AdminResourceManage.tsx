@@ -13,6 +13,7 @@ import { Loader2, Plus, Upload, X } from "lucide-react";
 const AdminResourceManage = () => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -35,6 +36,28 @@ const AdminResourceManage = () => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setUploading(true);
+      try {
+        const response = await resourcesApi.upload(file);
+        if (response.success) {
+          setFormData(prev => ({ ...prev, content_url: response.url }));
+          toast({ title: "File uploaded", description: "Resource file ready." });
+        }
+      } catch (error) {
+        toast({ 
+          title: "Upload Failed", 
+          description: error instanceof Error ? error.message : "Could not upload file", 
+          variant: "destructive" 
+        });
+      } finally {
+        setUploading(false);
+      }
+    }
+  };
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -44,6 +67,10 @@ const AdminResourceManage = () => {
       if (!formData.title || !formData.subject || !formData.grade_level) {
         throw new Error("Please fill in all required fields.");
       }
+      
+      if (!formData.content_url) {
+          throw new Error("Please upload a file or provide a content URL.");
+      }
 
       const payload = {
         title: formData.title,
@@ -52,7 +79,7 @@ const AdminResourceManage = () => {
         grade_level: parseInt(formData.grade_level),
         type: formData.type as any,
         tags: formData.tags.split(",").map((t) => t.trim()).filter(Boolean),
-        content_url: formData.content_url || "https://example.com/placeholder.pdf", // Placeholder if no file upload yet
+        content_url: formData.content_url,
         thumbnail_url: formData.thumbnail_url,
         source: formData.source || "SmartPath Admin",
         is_curated: true,
@@ -189,16 +216,37 @@ const AdminResourceManage = () => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="content_url">Content URL (or File Placeholder)</Label>
-                  <Input
-                    id="content_url"
-                    name="content_url"
-                    value={formData.content_url}
-                    onChange={handleInputChange}
-                    placeholder="https://..."
-                  />
+                  <Label htmlFor="content_url">Resource File</Label>
+                  <div className="flex gap-2">
+                    <Input
+                        id="content_url"
+                        name="content_url"
+                        value={formData.content_url}
+                        onChange={handleInputChange}
+                        placeholder="https://... or upload file"
+                        className="flex-1"
+                    />
+                    <div className="relative">
+                        <Button 
+                            type="button" 
+                            variant="outline" 
+                            size="icon"
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={uploading}
+                        >
+                            {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                        </Button>
+                        <input
+                            type="file"
+                            ref={fileInputRef}
+                            className="hidden"
+                            onChange={handleFileChange}
+                            accept=".pdf,.mp4,.doc,.docx,.jpg,.png"
+                        />
+                    </div>
+                  </div>
                   <p className="text-xs text-muted-foreground">
-                    For now, enter a direct link. File upload coming in Phase 2.
+                    Upload a file (PDF, Video, Image) or paste a direct URL.
                   </p>
                 </div>
                 <div className="space-y-2">

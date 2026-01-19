@@ -354,44 +354,33 @@ export const authApi = {
 };
 
 export const resourcesApi = {
-  list: (params: { q?: string; subject?: string; grade_level?: number; type?: string; page?: number; page_size?: number }) => {
-    const qs = new URLSearchParams();
-    if (params.q) qs.set("q", params.q);
-    if (params.subject) qs.set("subject", params.subject);
-    if (params.grade_level !== undefined) qs.set("grade_level", String(params.grade_level));
-    if (params.type) qs.set("type", params.type);
-    qs.set("page", String(params.page ?? 1));
-    qs.set("page_size", String(params.page_size ?? 20));
-    return apiClient.get<{ items: any[]; total: number; page: number; page_size: number; total_pages: number }>(`/resources?${qs.toString()}`);
+  create: (data: Omit<Resource, "id" | "created_at" | "updated_at" | "views" | "downloads" | "likes">) =>
+    apiClient.post<Resource>("/resources", data),
+    
+  list: (params?: { subject?: string; grade?: number; type?: string; limit?: number; offset?: number; q?: string }) => {
+    // Convert params to query string manually or use URLSearchParams
+    const query = new URLSearchParams();
+    if (params?.subject) query.append("subject", params.subject);
+    if (params?.grade) query.append("grade_level", String(params.grade));
+    if (params?.type) query.append("type", params.type);
+    if (params?.limit) query.append("limit", String(params.limit));
+    if (params?.offset) query.append("offset", String(params.offset));
+    if (params?.q) query.append("q", params.q);
+    
+    return apiClient.get<Resource[]>(`/resources?${query.toString()}`);
   },
-  detail: (id: number) => apiClient.get<any>(`/resources/${id}`),
-  favorite: (id: number) => apiClient.post<{ message: string }>(`/resources/${id}/favorite`, {}, true),
-  unfavorite: (id: number) => apiClient.delete<{ message: string }>(`/resources/${id}/favorite`),
-  create: (data: {
-    title: string;
-    description?: string;
-    subject: string;
-    grade_level?: number;
-    type: string;
-    tags?: string[];
-    content_url: string;
-    thumbnail_url?: string;
-    source?: string;
-    is_curated?: boolean;
-  }) => apiClient.post<any>(`/resources`, data, true),
-  update: (id: number, data: Partial<{
-    title: string;
-    description?: string;
-    subject: string;
-    grade_level?: number;
-    type: string;
-    tags?: string[];
-    content_url: string;
-    thumbnail_url?: string;
-    source?: string;
-    is_curated?: boolean;
-  }>) => apiClient.put<any>(`/resources/${id}`, data, true),
-  remove: (id: number) => apiClient.delete<{ message: string }>(`/resources/${id}`),
+
+  get: (id: number) => apiClient.get<Resource>(`/resources/${id}`),
+  
+  favorite: (id: number) => apiClient.post(`/resources/${id}/favorite`, {}),
+  unfavorite: (id: number) => apiClient.delete(`/resources/${id}/favorite`),
+
+  upload: async (file: File) => {
+    return apiClient.uploadFile<{ url: string; success: boolean }>(
+        "/resources/upload", 
+        file
+    );
+  }
 };
 export const reportsApi = {
   previewOCR: (file: File) => {

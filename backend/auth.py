@@ -28,9 +28,14 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 def get_password_hash(password: str) -> str:
     """Hash a password."""
-    # Truncate password to 72 bytes to avoid bcrypt limitation
-    truncated_password = password[:72] if len(password.encode('utf-8')) > 72 else password
-    return pwd_context.hash(truncated_password)
+    # Ensure password is bytes before checking length for truncation
+    password_bytes = password.encode('utf-8')
+    if len(password_bytes) > 72:
+        # Warning: Truncating password is not ideal for security but required for bcrypt
+        # A better approach in prod is to hash with SHA256 first, then bcrypt
+        truncated_password = password_bytes[:72]
+        return pwd_context.hash(truncated_password)
+    return pwd_context.hash(password)
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:

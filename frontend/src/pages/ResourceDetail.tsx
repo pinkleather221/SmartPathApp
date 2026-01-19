@@ -18,9 +18,11 @@ const ResourceDetail = () => {
     if (!id) return;
     setLoading(true);
     try {
-      const res = await resourcesApi.detail(Number(id));
+      // Corrected API method call: resourcesApi.get instead of resourcesApi.detail
+      const res = await resourcesApi.get(Number(id));
       setResource(res);
-    } catch {
+    } catch (e) {
+      console.error(e);
       toast({ title: "Failed to load resource", variant: "destructive" });
     } finally {
       setLoading(false);

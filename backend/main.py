@@ -386,6 +386,43 @@ def unfavorite_resource_item(
         raise HTTPException(status_code=500, detail="Failed to remove favorite")
     return MessageResponse(message="Unfavorited", success=True)
 
+@app.post(f"{settings.API_V1_PREFIX}/resources/upload")
+async def upload_resource_file(
+    file: UploadFile = File(...),
+    current_user: Dict[str, Any] = Depends(require_user_type("admin"))
+):
+    """Upload a file for a resource (Admin only)."""
+    from storage_service import storage_service
+    
+    # Validate file type
+    allowed_types = [
+        "application/pdf", 
+        "video/mp4", 
+        "video/mpeg", 
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "image/jpeg", "image/png"
+    ]
+    
+    if file.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid file type: {file.content_type}. Allowed: PDF, MP4, Word, Images."
+        )
+        
+    # Validate file size (max 50MB for resources)
+    # Check content-length header first if available
+    content_length = file.headers.get("content-length")
+    if content_length and int(content_length) > 50 * 1024 * 1024:
+         raise HTTPException(status_code=400, detail="File too large. Max 50MB.")
+
+    try:
+        public_url = await storage_service.upload_file(file, file.filename)
+        return {"url": public_url, "success": True}
+    except Exception as e:
+        logger.error(f"Resource upload error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to upload file")
+
 @app.get(f"{settings.API_V1_PREFIX}/auth/profile", response_model=UserProfile)
 async def get_profile(current_user: Dict[str, Any] = Depends(get_current_active_user)):
     """Get current user's profile."""
