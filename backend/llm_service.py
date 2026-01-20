@@ -1,7 +1,3 @@
-"""
-LLM integration service for AI-powered features.
-Uses Google Gemini API with caching and error handling.
-"""
 import json
 import hashlib
 from typing import Dict, List, Optional, Any
@@ -10,6 +6,8 @@ import google.generativeai as genai
 from google.generativeai.types import HarmCategory, HarmBlockThreshold
 
 from config import settings
+import logging
+logger = logging.getLogger(__name__)
 
 
 class LLMService:
@@ -29,17 +27,98 @@ class LLMService:
                 self.model = genai.GenerativeModel(self.model_name)
                 self.client_available = True
             except Exception as e:
-                print(f"Warning: Gemini initialization error: {e}")
+                logger.warning(f"Gemini initialization error: {e}")
                 self.client_available = False
         else:
             self.client_available = False
-            print("Warning: No Gemini API key configured. LLM features will be disabled.")
+            logger.warning("No Gemini API key configured. LLM features will be disabled.")
     
     def _generate_cache_key(self, prompt: str, context: Dict) -> str:
         """Generate cache key for prompt."""
         content = f"{prompt}{json.dumps(context, sort_keys=True)}"
         return hashlib.md5(content.encode()).hexdigest()
     
+    # ==================== MATH SOLVER ROUTES ====================
+
+    async def generate_practice_problems(
+        self,
+        subject: str,
+        topic: str,
+        grade_level: int,
+        count: int = 3,
+        difficulty: str = "medium"
+    ) -> List[Dict[str, str]]:
+        """Generate practice math problems based on a solved topic."""
+        if not self.client_available:
+            return []
+            
+        prompt = f"""Generate {count} practice math problems for a Grade {grade_level} student on the topic: {topic} ({subject}).
+        Difficulty: {difficulty}
+        
+        Return ONLY a JSON array of objects. Each object must have:
+        - "problem": The question text (use LaTeX for math)
+        - "solution": Step-by-step solution (use LaTeX)
+        - "answer": The final answer
+        
+        Example format:
+        [
+          {{
+            "problem": "Solve for x: $2x + 5 = 15$",
+            "solution": "Subtract 5 from both sides: $2x = 10$. Divide by 2: $x = 5$.",
+            "answer": "x = 5"
+          }}
+        ]"""
+        
+        try:
+            response = await self.generate(prompt, json_mode=True)
+            return json.loads(response)
+        except Exception as e:
+            logger.error(f"Practice problem generation error: {e}")
+            return []
+
+    async def solve_math_problem(
+        self,
+        problem_text: Optional[str] = None,
+        image_bytes: Optional[bytes] = None,
+        image_mime_type: Optional[str] = None
+    ) -> str:
+        """Solve a math problem using Gemini (Text and/or Image)."""
+        if not self.client_available:
+             return "AI service is currently unavailable. Please configure GEMINI_API_KEY."
+
+        system_instruction = (
+            "You are an expert math tutor for Kenyan high school student. "
+            "Solve the problem step-by-step. "
+            "Explain the logic clearly. "
+            "Use LaTeX for mathematical formulas, enclosing them in single dollar signs $...$ for inline and double $$...$$ for block equations. "
+            "If the image contains handwritten text, transcribe it first then solve. "
+            "Format the output with Markdown."
+        )
+
+        contents = [system_instruction]
+        
+        if problem_text:
+            contents.append(problem_text)
+            
+        if image_bytes and image_mime_type:
+            contents.append({"mime_type": image_mime_type, "data": image_bytes})
+            
+        if len(contents) == 1: # Only system instruction
+             return "Please provide a math problem (text or image)."
+
+        try:
+            response = await self.model.generate_content_async(
+                contents,
+                 generation_config=genai.types.GenerationConfig(
+                    temperature=0.2, # Low temp for math
+                    max_output_tokens=4096,
+                )
+            )
+            return response.text
+        except Exception as e:
+            logger.error(f"Math solver error: {e}")
+            return f"Error solving problem: {str(e)}"
+
     async def _call_gemini(self, prompt: str, system_prompt: Optional[str] = None) -> str:
         """Call Gemini API."""
         if not self.client_available:
@@ -171,7 +250,7 @@ class LLMService:
             
             return response
         except Exception as e:
-            print(f"LLM generation error: {e}")
+            logger.error(f"LLM generation error: {e}")
             return self._get_fallback_response(prompt)
     
     def _get_fallback_response(self, prompt: str) -> str:
@@ -209,7 +288,7 @@ class LLMService:
         topic: Optional[str],
         grade_level: int,
         count: int = 5,
-        curriculum: str = "CBC"
+        curriculum: str = "CBE"
     ) -> List[Dict[str, str]]:
         """Generate flashcards for a subject and topic."""
         prompt = f"""Generate {count} educational flashcards for a Kenyan high school student in Grade {grade_level} studying {subject}.
@@ -243,9 +322,59 @@ Make questions progressively more challenging. Ensure content is relevant to Ken
             else:
                 return []
         except Exception as e:
-            print(f"Flashcard generation error: {e}")
+            logger.error(f"Flashcard generation error: {e}")
             return []
     
+    async def get_resource_recommendations(
+        self,
+        subject: str,
+        topic: str,
+        grade_level: Optional[int] = None
+    ) -> List[Dict[str, Any]]:
+        """Get AI-recommended resources for a specific topic."""
+        # This implementation uses the database search via semantic similarity or keyword matching
+        # Since we don't have vector embeddings yet, we'll use keyword matching via Supabase
+        
+        from supabase_db import get_resources
+        
+        # 1. First, get resources matching the subject and grade
+        resources = get_resources(
+            subject=subject,
+            grade_level=grade_level,
+            limit=20 # Fetch a pool to rank
+        )
+        
+        if not resources:
+            return []
+            
+        # 2. If we have a topic, use LLM to rank relevance (optional) or simple keyword filtering
+        # For simplicity and speed, we'll do simple keyword matching first
+        topic_lower = topic.lower()
+        ranked_resources = []
+        
+        for res in resources:
+            score = 0
+            # Basic scoring based on text overlap
+            title_lower = res.get('title', '').lower()
+            desc_lower = res.get('description', '').lower()
+            tags = [t.lower() for t in res.get('tags', [])]
+            
+            if topic_lower in title_lower:
+                score += 10
+            if topic_lower in desc_lower:
+                score += 5
+            if any(t in topic_lower or topic_lower in t for t in tags):
+                score += 8
+                
+            if score > 0:
+                ranked_resources.append((score, res))
+                
+        # Sort by score descending
+        ranked_resources.sort(key=lambda x: x[0], reverse=True)
+        
+        # Return top 3 resources
+        return [r[1] for r in ranked_resources[:3]]
+
     # ==================== ACADEMIC FEEDBACK ====================
     
     async def generate_academic_feedback(
@@ -253,7 +382,7 @@ Make questions progressively more challenging. Ensure content is relevant to Ken
         current_grades: Dict[str, str],
         previous_grades: Optional[Dict[str, str]],
         grade_level: int,
-        curriculum: str = "CBC"
+        curriculum: str = "CBE"
     ) -> Dict[str, Any]:
         """Generate personalized academic feedback."""
         prompt = f"""Analyze the academic performance of a Grade {grade_level} Kenyan student (Curriculum: {curriculum}).
@@ -305,9 +434,7 @@ Be specific, constructive, and culturally appropriate for Kenyan students."""
                 "next_steps": feedback_data.get("next_steps", ["Review weak areas", "Practice regularly"])
             }
         except Exception as e:
-            print(f"Feedback generation error: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"Feedback generation error: {e}", exc_info=True)
             return {
                 "strengths": [],
                 "weaknesses": [],
@@ -316,6 +443,137 @@ Be specific, constructive, and culturally appropriate for Kenyan students."""
                 "next_steps": ["Review weak areas", "Practice regularly"]
             }
     
+    async def solve_math_problem(
+        self,
+        problem_text: Optional[str] = None,
+        image_bytes: Optional[bytes] = None,
+        image_mime_type: Optional[str] = None
+    ) -> str:
+        """Solve a math problem using Gemini (Text and/or Image)."""
+        if not self.client_available:
+             return "AI service is currently unavailable. Please configure GEMINI_API_KEY."
+
+        system_instruction = (
+            "You are an expert math tutor for Kenyan high school students. "
+            "Solve the problem step-by-step. "
+            "Explain the logic clearly. "
+            "Use LaTeX for mathematical formulas, enclosing them in single dollar signs $...$ for inline and double $$...$$ for block equations. "
+            "If the image contains handwritten text, transcribe it first then solve. "
+            "Format the output with Markdown."
+        )
+
+        contents = [system_instruction]
+        
+        if problem_text:
+            contents.append(problem_text)
+            
+        if image_bytes and image_mime_type:
+            contents.append({"mime_type": image_mime_type, "data": image_bytes})
+            
+        if len(contents) == 1: # Only system instruction
+             return "Please provide a math problem (text or image)."
+
+        try:
+            response = await self.model.generate_content_async(
+                contents,
+                 generation_config=genai.types.GenerationConfig(
+                    temperature=0.2, # Low temp for math
+                    max_output_tokens=2048,
+                )
+            )
+            return response.text
+        except Exception as e:
+            logger.error(f"Math solver error: {e}")
+            return f"Error solving problem: {str(e)}"
+    
+    # ==================== CHAT ASSISTANT ====================
+    
+    async def chat_with_tutor(
+        self,
+        message: str,
+        history: List[Dict[str, str]],
+        subject: Optional[str] = None,
+        grade_level: Optional[int] = None,
+        context_type: Optional[str] = None # "writing", "planning", "general"
+    ) -> str:
+        """Chat with AI Tutor."""
+        if not self.client_available:
+            return "AI service is currently unavailable. Please configure GEMINI_API_KEY."
+            
+        base_instruction = (
+            "You are a friendly and knowledgeable AI Tutor for SmartPath, an app for Kenyan high school students. "
+            f"{f'The student is in Grade {grade_level}. ' if grade_level else ''}"
+            f"{f'Current subject context: {subject}. ' if subject else ''}"
+        )
+
+        if context_type == "writing":
+            specific_instruction = (
+                "Role: Writing Assistant. "
+                "Help the student improve their essays, reports, or creative writing. "
+                "Focus on structure, clarity, grammar, and vocabulary. "
+                "Do NOT write the essay for them. Instead, provide outlines, feedback on specific paragraphs, "
+                "suggest better word choices, or explain grammatical rules. "
+                "Encourage their own voice."
+            )
+        elif context_type == "planning":
+             specific_instruction = (
+                "Role: Study Planner & Optimizer. "
+                "Help the student organize their study sessions. "
+                "Suggest optimal times for difficult subjects based on their energy levels (e.g., math in the morning). "
+                "Recommend break intervals (Pomodoro). "
+                "Help them prioritize tasks based on upcoming exams or weak areas. "
+                "Be motivating and practical."
+            )
+        else:
+            specific_instruction = (
+                "Role: General Academic Tutor. "
+                "Goal: Help students learn and understand concepts, not just give answers. "
+                "Use simple language. Explain concepts clearly. "
+                "Encourage critical thinking. "
+                "If asked about Kenyan curriculum (8-4-4 or CBC), be accurate. "
+                "Use Markdown for formatting. Use LaTeX for math ($...$). "
+                "IMPORTANT: You are strictly an academic tutor. "
+                "If the user asks about non-academic topics (e.g., entertainment, gossip, politics, personal advice), "
+                "politely decline and steer the conversation back to studies. "
+                "Do not write essays or do homework *for* the student; guide them to the solution instead."
+            )
+
+        system_prompt = f"{base_instruction} {specific_instruction}"
+
+        # Convert history to Gemini format
+        # Gemini expects [{'role': 'user'|'model', 'parts': [...]}]
+        chat_history = []
+        
+        # Add system prompt as the first message or context (Gemini doesn't have system role in chat history usually, but we can prepend it to the first message or use system_instruction in model init if available)
+        # For simple chat history, we'll prepend instructions to the conversation context
+        
+        for msg in history:
+            role = "user" if msg.get("role") in ["user", "student"] else "model"
+            chat_history.append({
+                "role": role,
+                "parts": [msg.get("content", "")]
+            })
+        
+        # Add current message
+        chat_history.append({
+            "role": "user",
+            "parts": [f"System Instructions: {system_prompt}\n\nUser Message: {message}"] if not history else [message]
+        })
+        
+        try:
+            # We use generate_content with the list of messages for stateless chat
+            response = await self.model.generate_content_async(
+                chat_history,
+                generation_config=genai.types.GenerationConfig(
+                    temperature=0.7,
+                    max_output_tokens=4096,
+                )
+            )
+            return response.text
+        except Exception as e:
+            logger.error(f"Chat error: {e}")
+            return "I'm having trouble connecting right now. Please try again."
+
     # ==================== CAREER RECOMMENDATIONS ====================
     
     async def generate_study_recommendations(
@@ -384,7 +642,7 @@ Return your response as a JSON array:"""
                 raise ValueError("Invalid response format")
                 
         except Exception as e:
-            print(f"Error generating AI recommendations: {e}")
+            logger.error(f"Error generating AI recommendations: {e}")
             # Fallback recommendations
             recs = []
             if weak_subjects:
@@ -538,7 +796,7 @@ Return ONLY the JSON array, no other text:"""
 
             return normalized[:5]
         except Exception as e:
-            print(f"Career recommendation error: {e}")
+            logger.error(f"Career recommendation error: {e}")
             # Enhanced fallback based on subjects
             fallback_careers = {
                 "Mathematics": {
@@ -716,6 +974,7 @@ CRITICAL REQUIREMENTS:
 5. Allocate more time to weaker subjects
 6. Distribute study time across the week for balanced learning
 7. Ensure each subject gets adequate time based on priority
+8. For the subject "Kiswahili", the ENTIRE content in the "focus_areas" field MUST be written in the Swahili language. This includes the explanations and descriptions. Do not mix English. Example: Instead of "Alphabet recognition", use "Kutambua herufi". Instead of "comprehension", use "Ufahamu". Ensure the whole sentence is in Swahili.
 
 Example Response Format:
 If Mathematics with focus on "Calculus, Derivatives" is requested:
@@ -760,9 +1019,9 @@ If Mathematics with focus on "Calculus, Derivatives" is requested:
             has_weekly_schedule = bool(parsed_response.get("weekly_schedule"))
             has_focus_areas = bool(parsed_response.get("focus_areas"))
             has_strategies = bool(parsed_response.get("strategies"))
-            
+
             logger.info(f"LLM response validation - weekly_schedule: {has_weekly_schedule}, focus_areas: {has_focus_areas}, strategies: {has_strategies}")
-            
+
             # If we have focus_areas from user, ensure LLM addressed them
             if focus_areas and has_focus_areas:
                 for subject, topics in focus_areas.items():
@@ -771,7 +1030,7 @@ If Mathematics with focus on "Calculus, Derivatives" is requested:
                         logger.info(f"LLM generated focus_areas for {subject}: {llm_focus[:100]}")
                     else:
                         logger.warning(f"LLM did not generate focus_areas for {subject} with requested topics: {topics}")
-            
+
             return parsed_response
             
         except json.JSONDecodeError as e:
@@ -830,7 +1089,7 @@ Make it age-appropriate and aligned with Kenyan curriculum."""
             response = await self.generate(prompt, json_mode=True)
             return json.loads(response)
         except Exception as e:
-            print(f"Learning strategy error: {e}")
+            logger.error(f"Learning strategy error: {e}")
             return {
                 "explanation": f"Study {topic} in {subject} regularly.",
                 "examples": [],
@@ -871,7 +1130,7 @@ Be encouraging and constructive. Highlight what the student got right and what n
             response = await self.generate(prompt, json_mode=True)
             return json.loads(response)
         except Exception as e:
-            print(f"Answer evaluation error: {e}")
+            logger.error(f"Answer evaluation error: {e}")
             # Simple keyword-based fallback
             is_correct = student_answer.lower() in correct_answer.lower() or correct_answer.lower() in student_answer.lower()
             return {
@@ -915,7 +1174,7 @@ Provide analysis in JSON format:
             response = await self.generate(prompt, json_mode=True)
             return json.loads(response)
         except Exception as e:
-            print(f"Performance analysis error: {e}")
+            logger.error(f"Performance analysis error: {e}")
             return {
                 "trends": {},
                 "overall_assessment": "Continue monitoring performance.",

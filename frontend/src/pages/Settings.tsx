@@ -4,6 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
@@ -14,6 +15,8 @@ import { Badge } from "@/components/ui/badge";
 import { User, Bell, Lock, Trash2, Loader2, Link, Copy, Check, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { authApi, inviteApi, relationshipsApi, InviteCode, LinkedStudent, LinkedGuardian } from "@/lib/api";
+import { ConnectionManagement } from "@/components/connections/ConnectionManagement";
+import { AvatarUpload } from "@/components/profile/AvatarUpload";
 
 // Connections Section Component
 const ConnectionsSection = ({ userType }: { userType?: string }) => {
@@ -166,50 +169,11 @@ const ConnectionsSection = ({ userType }: { userType?: string }) => {
           </CardContent>
         </Card>
 
-        {/* Linked Students */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="w-5 h-5" />
-              Linked {userType === "teacher" ? "Students" : "Children"}
-            </CardTitle>
-            <CardDescription>
-              {userType === "teacher" ? "Students" : "Children"} connected to your account
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {loadingStudents ? (
-              <p className="text-muted-foreground">Loading...</p>
-            ) : linkedStudents && linkedStudents.length > 0 ? (
-              <div className="space-y-3">
-                {linkedStudents.map((student: LinkedStudent) => (
-                  <div 
-                    key={student.user_id}
-                    className="flex items-center justify-between p-3 rounded-lg border"
-                  >
-                    <div>
-                      <p className="font-medium">{student.full_name}</p>
-                      <p className="text-sm text-muted-foreground">{student.email}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {student.grade_level && (
-                        <Badge variant="outline">Grade {student.grade_level}</Badge>
-                      )}
-                      <Badge variant="secondary">
-                        Linked {new Date(student.linked_at).toLocaleDateString()}
-                      </Badge>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-muted-foreground text-center py-8">
-                No {userType === "teacher" ? "students" : "children"} linked yet. 
-                Share your invite code to get started.
-              </p>
-            )}
-          </CardContent>
-        </Card>
+        {/* Connection Management */}
+        <ConnectionManagement
+          students={linkedStudents || []}
+          userType={userType as "parent" | "teacher"}
+        />
       </>
     );
   }
@@ -321,7 +285,7 @@ const Settings = () => {
   const [phone, setPhone] = useState("");
   const [school, setSchool] = useState("");
   const [gradeLevel, setGradeLevel] = useState("");
-  const [curriculum, setCurriculum] = useState("cbc");
+  const [curriculum, setCurriculum] = useState("cbe");
 
   // Update form when user data loads
   useEffect(() => {
@@ -331,7 +295,7 @@ const Settings = () => {
       setPhone(user.phone_number || "");
       setSchool(user.school_name || "");
       setGradeLevel(user.grade_level?.toString() || "");
-      setCurriculum(user.curriculum_type?.toLowerCase() || "cbc");
+      setCurriculum(user.curriculum_type?.toLowerCase() || "cbe");
     }
   }, [user]);
 
@@ -368,7 +332,7 @@ const Settings = () => {
       phone_number: phone || undefined,
       school_name: school || undefined,
       grade_level: gradeLevel ? parseInt(gradeLevel) : undefined,
-      curriculum_type: curriculum.toUpperCase() === "8-4-4" ? "8-4-4" : "CBC",
+      curriculum_type: curriculum.toUpperCase() === "8-4-4" ? "8-4-4" : "CBE",
     });
   };
 
@@ -385,6 +349,32 @@ const Settings = () => {
       description: "Your account has been permanently deleted.",
       variant: "destructive",
     });
+  };
+
+  // Dynamic grade options based on curriculum
+  const getGradeOptions = () => {
+    if (curriculum === "8-4-4") {
+      return [
+        { value: "3", label: "Form 3" },
+        { value: "4", label: "Form 4" }
+      ];
+    } else {
+      // CBE grades
+      return [
+        { value: "7", label: "Grade 7" },
+        { value: "8", label: "Grade 8" },
+        { value: "9", label: "Grade 9" },
+        { value: "10", label: "Grade 10" },
+        { value: "11", label: "Grade 11" },
+        { value: "12", label: "Grade 12" }
+      ];
+    }
+  };
+
+  // Handle curriculum change - reset grade level when curriculum changes
+  const handleCurriculumChange = (value: string) => {
+    setCurriculum(value);
+    setGradeLevel(""); // Reset grade level when curriculum changes
   };
 
   return (
@@ -419,6 +409,17 @@ const Settings = () => {
 
           {/* Profile Tab */}
           <TabsContent value="profile" className="space-y-6">
+            {/* Profile Picture Upload */}
+            <AvatarUpload
+              currentAvatar={user?.profile_picture}
+              userName={user?.full_name || ""}
+              userInitials={user?.full_name?.split(' ').map(n => n[0]).join('').toUpperCase() || "U"}
+              onAvatarUpdate={() => {
+                // Invalidate user data to refetch with new profile picture
+                queryClient.invalidateQueries({ queryKey: ["currentUser"] });
+              }}
+            />
+
             <Card>
               <CardHeader>
                 <CardTitle>Personal Information</CardTitle>
@@ -474,9 +475,9 @@ const Settings = () => {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {[7, 8, 9, 10, 11, 12].map((grade) => (
-                          <SelectItem key={grade} value={grade.toString()}>
-                            Grade {grade}
+                        {getGradeOptions().map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -485,12 +486,12 @@ const Settings = () => {
 
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Curriculum</label>
-                    <Select value={curriculum} onValueChange={setCurriculum}>
+                    <Select value={curriculum} onValueChange={handleCurriculumChange}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="cbc">CBC</SelectItem>
+                        <SelectItem value="cbe">CBE</SelectItem>
                         <SelectItem value="8-4-4">8-4-4</SelectItem>
                       </SelectContent>
                     </Select>
@@ -603,17 +604,17 @@ const Settings = () => {
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Current Password</label>
-                  <Input type="password" />
+                  <PasswordInput />
                 </div>
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium">New Password</label>
-                  <Input type="password" />
+                  <PasswordInput />
                 </div>
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Confirm New Password</label>
-                  <Input type="password" />
+                  <PasswordInput />
                 </div>
 
                 <Button onClick={handleChangePassword} className="w-full">

@@ -5,6 +5,18 @@
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
 
+// Extract backend base URL (remove /api/v1)
+const BACKEND_BASE_URL = API_BASE_URL.replace('/api/v1', '');
+
+/**
+ * Convert relative upload URLs to full backend URLs
+ */
+export const getImageUrl = (relativeUrl: string | null | undefined): string | undefined => {
+  if (!relativeUrl) return undefined;
+  if (relativeUrl.startsWith('http')) return relativeUrl; // Already a full URL
+  return `${BACKEND_BASE_URL}${relativeUrl}`;
+};
+
 interface ApiResponse<T> {
   data?: T;
   message?: string;
@@ -86,10 +98,32 @@ class ApiClient {
       throw new Error(text || "Unknown error");
     }
 
+interface ValidationError {
+  loc?: (string | number)[];
+  msg?: string;
+  type?: string;
+}
+
+interface ValidationResponse {
+  detail: ValidationError[];
+}
+
     if (!response.ok) {
-      const error = (data as ApiResponse<T>).detail || (data as ApiResponse<T>).message || `Request failed with status ${response.status}`;
+      // Handle validation errors (422) which have detailed error structure
+      let errorMessage = (data as ApiResponse<T>).message || `Request failed with status ${response.status}`;
+      
+      if (response.status === 422) {
+         const errorData = data as unknown as ValidationResponse;
+         if (errorData.detail && Array.isArray(errorData.detail)) {
+            errorMessage = errorData.detail.map((err) =>
+              `${err.loc?.join('.') || 'unknown'}: ${err.msg || 'Unknown error'}`
+            ).join(', ');
+         }
+      } else {
+        errorMessage = (data as ApiResponse<T>).detail || errorMessage;
+      }
       console.error(`[API] Error response (${response.status}):`, data);
-      throw new Error(error);
+      throw new Error(errorMessage);
     }
 
     // Handle different response structures
@@ -116,7 +150,7 @@ class ApiClient {
       }
 
       console.log(`[API] GET ${url}`); // Debug log
-      
+
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
@@ -255,6 +289,34 @@ export const authApi = {
       false
     ),
 
+  forgotPassword: (email: string) => {
+    const formData = new FormData();
+    formData.append("email", email);
+    // Use apiClient.post but skip JSON content-type by passing FormData
+    // Note: apiClient implementation might force JSON. If so, we need to bypass it or adjust apiClient.
+    // Assuming apiClient handles FormData correctly if passed as body (axios/fetch usually do).
+    // If apiClient forces JSON, we might need a raw fetch here.
+    // Let's assume standard fetch behavior where body=FormData sets multipart/form-data.
+    // However, our backend expects Form(...) which is x-www-form-urlencoded or multipart.
+    
+    // Using direct fetch to ensure correct headers for FormData
+    return fetch(`${API_BASE_URL}/auth/forgot-password`, {
+        method: 'POST',
+        body: formData
+    }).then(res => apiClient.handleResponse<{ message: string }>(res));
+  },
+
+  resetPassword: (token: string, newPassword: string) => {
+    const formData = new FormData();
+    formData.append("token", token);
+    formData.append("new_password", newPassword);
+    
+    return fetch(`${API_BASE_URL}/auth/reset-password`, {
+        method: 'POST',
+        body: formData
+    }).then(res => apiClient.handleResponse<{ message: string }>(res));
+  },
+
   getProfile: () => apiClient.get<{
     user_id: number;
     email: string;
@@ -282,8 +344,57 @@ export const authApi = {
     phone_number?: string;
     school_name?: string;
   }>("/auth/profile", data),
+
+  uploadProfilePicture: async (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch(`${API_BASE_URL}/auth/profile-picture`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiClient.getToken()}`,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Upload failed' }));
+      throw new Error(error.detail || 'Upload failed');
+    }
+
+    return response.json();
+  },
 };
 
+export const resourcesApi = {
+  create: (data: Omit<Resource, "id" | "created_at" | "updated_at" | "views" | "downloads" | "likes">) =>
+    apiClient.post<Resource>("/resources", data),
+    
+  list: (params?: { subject?: string; grade?: number; type?: string; limit?: number; offset?: number; q?: string }) => {
+    // Convert params to query string manually or use URLSearchParams
+    const query = new URLSearchParams();
+    if (params?.subject) query.append("subject", params.subject);
+    if (params?.grade) query.append("grade_level", String(params.grade));
+    if (params?.type) query.append("type", params.type);
+    if (params?.limit) query.append("limit", String(params.limit));
+    if (params?.offset) query.append("offset", String(params.offset));
+    if (params?.q) query.append("q", params.q);
+    
+    return apiClient.get<Resource[]>(`/resources?${query.toString()}`);
+  },
+
+  get: (id: number) => apiClient.get<Resource>(`/resources/${id}`),
+  
+  favorite: (id: number) => apiClient.post(`/resources/${id}/favorite`, {}),
+  unfavorite: (id: number) => apiClient.delete(`/resources/${id}/favorite`),
+
+  upload: async (file: File) => {
+    return apiClient.uploadFile<{ url: string; success: boolean }>(
+        "/resources/upload", 
+        file
+    );
+  }
+};
 export const reportsApi = {
   previewOCR: (file: File) => {
     const formData = new FormData();
@@ -386,7 +497,7 @@ export const reportsApi = {
   },
 
   analyze: (reportId: number) => apiClient.post(`/reports/analyze?report_id=${reportId}`, {}),
-  
+
   delete: (reportId: number) => apiClient.delete(`/reports/${reportId}`),
 };
 
@@ -423,6 +534,12 @@ export const careerApi = {
   }) => apiClient.post("/career/quiz", data),
   getDetails: (recommendationId: number) =>
     apiClient.get(`/career/${recommendationId}/details`),
+  favorite: (recommendationId: number) =>
+    apiClient.post(`/career/${recommendationId}/favorite`, {}),
+  unfavorite: (recommendationId: number) =>
+    apiClient.delete(`/career/${recommendationId}/favorite`),
+  share: (recommendationId: number) =>
+    apiClient.post(`/career/${recommendationId}/share`, {}),
 };
 
 export const studyPlansApi = {
@@ -435,15 +552,21 @@ export const studyPlansApi = {
 
   getActive: () => apiClient.get("/study-plans/active"),
 
+  getAll: () => apiClient.get("/study-plans/all"),
+
   getById: (planId: number) => {
-    // Get active plans and filter by ID
-    return apiClient.get("/study-plans/active").then((plans: unknown[]) => {
-      const plansArray = plans as Array<{ plan_id: number }>;
-      return plansArray.find((p) => p.plan_id === planId);
-    });
+    return apiClient.get(`/study-plans/${planId}`);
   },
 
-  update: (planId: number, data: { is_active?: boolean; completed_topics?: string[] }) =>
+  update: (planId: number, data: {
+    subject?: string;
+    focus_area?: string;
+    study_strategy?: string;
+    available_hours_per_day?: number;
+    is_active?: boolean;
+    status?: string;
+    completed_topics?: string[]
+  }) =>
     apiClient.put(`/study-plans/${planId}/update`, data),
 
   delete: (planId: number) => apiClient.delete(`/study-plans/${planId}`),
@@ -452,6 +575,7 @@ export const studyPlansApi = {
     subject: string;
     duration_minutes: number;
     completed: boolean;
+    notes?: string;
     topics_covered?: string[];
   }) => apiClient.post(`/study-plans/${planId}/log-session`, data),
 };
@@ -482,6 +606,7 @@ export interface LinkedStudent {
   email: string;
   grade_level?: number;
   school_name?: string;
+  profile_picture?: string;
   relationship_type: string;
   linked_at: string;
 }
@@ -490,6 +615,7 @@ export interface LinkedGuardian {
   user_id: number;
   full_name: string;
   email: string;
+  profile_picture?: string;
   user_type: string;
   relationship_type: string;
   linked_at: string;
@@ -510,9 +636,9 @@ export interface StudentDashboard {
 export const inviteApi = {
   generateCode: () => apiClient.post<InviteCode>("/invite/generate"),
   getMyCodes: () => apiClient.get<InviteCode[]>("/invite/my-codes"),
-  redeemCode: (code: string) => 
+  redeemCode: (code: string) =>
     apiClient.post<{ message: string; success: boolean; data?: { relationship_id: number } }>(
-      "/invite/redeem", 
+      "/invite/redeem",
       { code }
     ),
 };
@@ -520,14 +646,14 @@ export const inviteApi = {
 export const relationshipsApi = {
   getLinkedStudents: () => apiClient.get<LinkedStudent[]>("/relationships/students"),
   getLinkedGuardians: () => apiClient.get<LinkedGuardian[]>("/relationships/guardians"),
-  getStudentDashboard: (studentId: number) => 
+  getStudentDashboard: (studentId: number) =>
     apiClient.get<StudentDashboard>(`/students/${studentId}/dashboard`),
   getStudentReports: (studentId: number, limit?: number) =>
     apiClient.get(`/students/${studentId}/reports`, limit ? { limit } : undefined),
   getStudentFlashcards: (studentId: number, subject?: string, limit?: number) =>
-    apiClient.get(`/students/${studentId}/flashcards`, { 
-      ...(subject && { subject }), 
-      ...(limit && { limit }) 
+    apiClient.get(`/students/${studentId}/flashcards`, {
+      ...(subject && { subject }),
+      ...(limit && { limit })
     }),
   getStudentCareer: (studentId: number) =>
     apiClient.get(`/students/${studentId}/career`),
@@ -538,8 +664,81 @@ export const relationshipsApi = {
     title: string;
     content: string;
   }) => apiClient.post(`/students/${studentId}/insights`, { ...data, student_id: studentId }),
-  removeStudentLink: (studentId: number) => 
+  removeStudentLink: (studentId: number) =>
     apiClient.delete(`/relationships/${studentId}`),
+};
+
+export const mathApi = {
+  solve: (prompt?: string, file?: File) => {
+    const formData = new FormData();
+    if (prompt) formData.append("prompt", prompt);
+    if (file) formData.append("file", file);
+
+    const headers: HeadersInit = {};
+    const token = apiClient.getToken();
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    const url = `${API_BASE_URL}/math/solve`;
+    
+    // Use a longer timeout for LLM
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minutes
+
+    return fetch(url, {
+      method: "POST",
+      headers,
+      body: formData,
+      signal: controller.signal,
+    })
+    .then(async (response) => {
+        clearTimeout(timeoutId);
+        return apiClient.handleResponse<{ solution: string; success: boolean }>(response);
+    })
+    .catch((error) => {
+        clearTimeout(timeoutId);
+        if (error.name === 'AbortError') throw new Error("Request timed out");
+        throw error;
+    });
+  },
+
+  generatePractice: (subject: string, topic: string, gradeLevel: number) => {
+    const formData = new FormData();
+    formData.append("subject", subject);
+    formData.append("topic", topic);
+    formData.append("grade_level", String(gradeLevel));
+
+    const headers: HeadersInit = {};
+    const token = apiClient.getToken();
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+interface MathProblem {
+  problem_text: string;
+  options: string[];
+  correct_answer: string;
+  explanation: string;
+  difficulty: string;
+}
+
+    return fetch(`${API_BASE_URL}/math/practice`, {
+        method: "POST",
+        headers,
+        body: formData
+    }).then(res => apiClient.handleResponse<{ problems: MathProblem[]; success: boolean }>(res));
+  }
+};
+
+export const chatApi = {
+  send: (message: string, history: { role: string; content: string }[], subject?: string, context?: string) =>
+    apiClient.post<{ message: string; success: boolean }>("/chat/send", {
+      message,
+      history,
+      subject,
+      context
+    }),
 };
 
 // Insight types for guardian-created insights
@@ -580,5 +779,23 @@ export interface StudentCareer {
   suitable_universities?: string[];
 }
 
-export default apiClient;
+export interface Resource {
+  resource_id: number;
+  title: string;
+  description?: string;
+  subject: string;
+  grade_level?: number;
+  type: "pdf" | "video" | "note" | "toolkit";
+  tags?: string[];
+  content_url: string;
+  thumbnail_url?: string;
+  source?: string;
+  is_curated: boolean;
+  created_at: string;
+  views: number;
+  downloads: number;
+  likes: number;
+  is_favorite: boolean;
+}
 
+export default apiClient;

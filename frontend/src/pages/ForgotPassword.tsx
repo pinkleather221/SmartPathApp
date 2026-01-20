@@ -6,6 +6,9 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { GraduationCap, ArrowLeft, Mail } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { ModeToggle } from "@/components/mode-toggle";
+
+import { authApi } from "@/lib/api";
 
 const ForgotPassword = () => {
   const { toast } = useToast();
@@ -17,19 +20,31 @@ const ForgotPassword = () => {
     e.preventDefault();
     setIsLoading(true);
 
-    // Simulate API call
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      await authApi.forgotPassword(email);
       setEmailSent(true);
       toast({
         title: "Reset link sent!",
-        description: "Check your email for password reset instructions.",
+        description: "If an account exists, you will receive password reset instructions.",
       });
-    }, 1500);
+    } catch (error) {
+        // We don't want to reveal if email exists, so we might show same success message or generic error
+        // But for UX, if it's a network error, we show it.
+        toast({
+            title: "Request failed",
+            description: "Please try again later.",
+            variant: "destructive"
+        });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-background via-muted to-background p-4">
+    <div className="relative min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-background via-muted to-background p-4">
+      <div className="absolute top-4 right-4">
+        <ModeToggle />
+      </div>
       <div className="w-full max-w-md">
         <div className="flex flex-col items-center mb-8">
           <div className="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center mb-4 shadow-lg">

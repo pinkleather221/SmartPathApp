@@ -4,13 +4,16 @@ Handles grade analysis, career matching, study planning, and more.
 """
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
-from sqlalchemy.orm import Session
-from sqlalchemy import desc, func
 
-from database import (
-    User, AcademicReport, SubjectPerformance, Flashcard, FlashcardReview,
-    CareerRecommendation, StudyPlan, StudySession, LearningInsight,
-    DifficultyLevel, PlanStatus, InsightType, InviteCode, UserRelationship, UserType
+# Import Supabase database functions instead of SQLAlchemy
+from supabase_db import (
+    create_academic_report, get_user_reports, update_subject_performance, get_subject_performance,
+    create_flashcard, get_user_flashcards, update_flashcard, create_flashcard_review,
+    create_career_recommendation, get_user_career_recommendations,
+    create_study_plan, get_user_study_plans, update_study_plan,
+    create_study_session, get_user_study_sessions,
+    create_learning_insight, get_user_insights, mark_insight_read,
+    get_user_by_id, get_user_by_email, create_user, update_user, get_users_by_type
 )
 from models import (
     ReportAnalysis, SubjectPerformanceResponse, PerformanceDashboard,
@@ -30,16 +33,18 @@ from utils import (
     numeric_to_grade
 )
 from llm_service import llm_service
+from config import supabase
+import logging
+logger = logging.getLogger(__name__)
 
 
 # ==================== REPORT SERVICES ====================
 
 class ReportService:
     """Service for handling academic reports."""
-    
+
     @staticmethod
     def create_report(
-        db: Session,
         user_id: int,
         report_date: datetime,
         term: str,
@@ -47,128 +52,117 @@ class ReportService:
         grades_json: Dict[str, str],
         file_path: Optional[str] = None,
         file_type: Optional[str] = None
-    ) -> AcademicReport:
+    ) -> Optional[Dict[str, any]]:
         """Create a new academic report."""
-        overall_gpa = calculate_gpa(grades_json)
-        
-        report = AcademicReport(
-            user_id=user_id,
-            report_date=report_date,
-            term=term,
-            year=year,
-            grades_json=grades_json,
-            overall_gpa=overall_gpa,
-            file_path=file_path,
-            file_type=file_type,
-            processed=True
-        )
-        
-        db.add(report)
-        db.commit()
-        db.refresh(report)
-        
-        # Update subject performance
-        ReportService._update_subject_performance(db, user_id, grades_json)
-        
+        report_data = {
+            'user_id': user_id,
+            'report_date': report_date.isoformat(),
+            'term': term,
+            'year': year,
+            'grades_json': grades_json,
+            'file_path': file_path,
+            'file_type': file_type
+        }
+
+        report = create_academic_report(report_data)
         return report
     
     @staticmethod
-    def _update_subject_performance(db: Session, user_id: int, grades: Dict[str, str]):
+    def _update_subject_performance(user_id: int, grades: Dict[str, str]):
         """Update subject performance records."""
         # Get historical grades for trend analysis
-        reports = db.query(AcademicReport).filter(
-            AcademicReport.user_id == user_id
-        ).order_by(desc(AcademicReport.report_date)).limit(5).all()
-        
+        reports = get_user_reports(user_id)
+
         for subject, grade in grades.items():
             subject_normalized = normalize_subject_name(subject)
-            
+
             # Get existing performance record
-            perf = db.query(SubjectPerformance).filter(
-                SubjectPerformance.user_id == user_id,
-                SubjectPerformance.subject == subject_normalized
-            ).first()
-            
+            existing_perf = supabase.table('subject_performance').select('*').eq('user_id', user_id).eq('subject', subject_normalized).execute()
+            perf_record = existing_perf.data[0] if existing_perf.data else None
+
             # Get grade history for trend
             grade_history = []
             for report in reports:
-                if subject in report.grades_json:
-                    grade_history.append(grade_to_numeric(report.grades_json[subject]))
-            
+                if subject in report['grades_json']:
+                    grade_history.append(grade_to_numeric(report['grades_json'][subject]))
+
             # Add current grade
             current_numeric = grade_to_numeric(grade)
             grade_history.insert(0, current_numeric)
-            
+
             # Analyze trend
             trend = analyze_grade_trend(grade_history) if len(grade_history) > 1 else "stable"
             strength_score = calculate_strength_score(grade, trend)
-            
+
             # Identify weakness areas (if grade is low)
             weakness_areas = []
             if current_numeric < 6.0:  # Below C+
                 weakness_areas = [f"{subject_normalized} fundamentals"]
-            
-            if perf:
-                perf.current_grade = grade
-                perf.grade_numeric = current_numeric
-                perf.trend = trend
-                perf.strength_score = strength_score
-                perf.weakness_areas = weakness_areas
+
+            perf_data = {
+                'user_id': user_id,
+                'subject': subject_normalized,
+                'current_grade': grade,
+                'grade_numeric': current_numeric,
+                'trend': trend,
+                'strength_score': strength_score,
+                'weakness_areas': weakness_areas,
+                'last_updated': datetime.utcnow().isoformat()
+            }
+
+            if perf_record:
+                supabase.table('subject_performance').update(perf_data).eq('performance_id', perf_record['performance_id']).execute()
             else:
-                perf = SubjectPerformance(
-                    user_id=user_id,
-                    subject=subject_normalized,
-                    current_grade=grade,
-                    grade_numeric=current_numeric,
-                    trend=trend,
-                    strength_score=strength_score,
-                    weakness_areas=weakness_areas
-                )
-                db.add(perf)
-        
-        db.commit()
+                supabase.table('subject_performance').insert(perf_data).execute()
     
     @staticmethod
-    async def analyze_report(db: Session, report_id: int) -> ReportAnalysis:
+    async def analyze_report(report_id: int) -> ReportAnalysis:
         """Analyze a report and generate insights."""
-        report = db.query(AcademicReport).filter(AcademicReport.report_id == report_id).first()
-        if not report:
+        # Get all reports for the user to find this specific report
+        # This is a simplified approach - in production, you'd want to optimize this
+        from supabase_db import supabase
+
+        # Get the specific report
+        response = supabase.table('academic_reports').select('*').eq('report_id', report_id).execute()
+        if not response.data:
             raise ValueError("Report not found")
-        
-        grades = report.grades_json
+
+        report = response.data[0]
+        grades = report['grades_json']
         strong_subjects = identify_strong_subjects(grades, "B+")
-        weak_subjects = identify_weak_subjects(grades, "C")
-        
-        # Get previous report for trend
-        prev_report = db.query(AcademicReport).filter(
-            AcademicReport.user_id == report.user_id,
-            AcademicReport.report_id != report_id,
-            AcademicReport.report_date < report.report_date
-        ).order_by(desc(AcademicReport.report_date)).first()
-        
+        weak_subjects = identify_weak_subjects(grades, "B")  # Changed from "C" to "B" to catch more subjects
+
+        # Get previous reports for trend analysis
+        prev_reports = supabase.table('academic_reports').select('*').eq('user_id', report['user_id']).neq('report_id', report_id).lt('report_date', report['report_date']).order('report_date', desc=True).limit(1).execute()
+
         trend_analysis = {}
-        if prev_report:
+        if prev_reports.data:
+            prev_report = prev_reports.data[0]
             for subject in grades.keys():
                 current = grade_to_numeric(grades.get(subject, "E"))
-                previous = grade_to_numeric(prev_report.grades_json.get(subject, "E"))
+                previous = grade_to_numeric(prev_report['grades_json'].get(subject, "E"))
                 if current > previous:
                     trend_analysis[subject] = "improving"
                 elif current < previous:
                     trend_analysis[subject] = "declining"
                 else:
                     trend_analysis[subject] = "stable"
+        else:
+            # For first report, mark all subjects as stable
+            for subject in grades.keys():
+                trend_analysis[subject] = "stable"
         
         # Generate AI-powered recommendations using Gemini
         try:
-            recommendations = await llm_service.generate_study_recommendations(
-                grades=grades,
-                strong_subjects=strong_subjects,
-                weak_subjects=weak_subjects,
-                overall_gpa=report.overall_gpa or 0.0,
-                trend_analysis=trend_analysis if prev_report else None
-            )
+                recommendations = await llm_service.generate_study_recommendations(
+                    grades=grades,
+                    strong_subjects=strong_subjects,
+                    weak_subjects=weak_subjects,
+                    overall_gpa=report.get('overall_gpa', 0.0) or 0.0,
+                    trend_analysis=trend_analysis if prev_report else None
+                )
         except Exception as e:
-            print(f"Error generating AI recommendations: {e}")
+            logger.error(f"Error generating AI recommendations: {e}")
             # Fallback recommendations
             recommendations = []
             if weak_subjects:
@@ -178,22 +172,22 @@ class ReportService:
             if not recommendations:
                 recommendations.append("Keep up the consistent study habits for continued success")
         
-        return ReportAnalysis(
+        result = ReportAnalysis(
             report_id=report_id,
-            overall_gpa=report.overall_gpa or 0.0,
+            overall_gpa=report.get('overall_gpa', 0.0) or 0.0,
             subject_count=len(grades),
             strong_subjects=strong_subjects,
             weak_subjects=weak_subjects,
             trend_analysis=trend_analysis,
             recommendations=recommendations
         )
+        logger.debug(f"Returning analysis with trend_analysis: {trend_analysis}")
+        return result
     
     @staticmethod
-    def get_report_history(db: Session, user_id: int, limit: int = 10) -> List[AcademicReport]:
+    def get_report_history(user_id: int, limit: int = 10) -> List[Dict[str, any]]:
         """Get user's report history."""
-        return db.query(AcademicReport).filter(
-            AcademicReport.user_id == user_id
-        ).order_by(desc(AcademicReport.report_date)).limit(limit).all()
+        return get_user_reports(user_id)[:limit]
 
 
 # ==================== PERFORMANCE SERVICES ====================
@@ -202,14 +196,12 @@ class PerformanceService:
     """Service for performance analytics."""
     
     @staticmethod
-    def get_dashboard(db: Session, user_id: int) -> PerformanceDashboard:
+    def get_dashboard(user_id: int) -> PerformanceDashboard:
         """Get performance dashboard data."""
-        # Get latest report
-        latest_report = db.query(AcademicReport).filter(
-            AcademicReport.user_id == user_id
-        ).order_by(desc(AcademicReport.report_date)).first()
-        
-        if not latest_report:
+        # Get reports for the user
+        reports = get_user_reports(user_id)
+
+        if not reports:
             return PerformanceDashboard(
                 overall_gpa=0.0,
                 total_subjects=0,
@@ -219,29 +211,34 @@ class PerformanceService:
                 declining_subjects=[],
                 recent_reports=[]
             )
-        
+
+        # Get latest report (first in sorted list)
+        latest_report = reports[0]
+
         # Get subject performances
-        subject_perfs = db.query(SubjectPerformance).filter(
-            SubjectPerformance.user_id == user_id
-        ).all()
-        
-        strong_subjects = [sp for sp in subject_perfs if sp.strength_score >= 70]
-        weak_subjects = [sp for sp in subject_perfs if sp.strength_score < 60]
-        improving = [sp.subject for sp in subject_perfs if sp.trend == "improving"]
-        declining = [sp.subject for sp in subject_perfs if sp.trend == "declining"]
-        
-        # Get recent reports
-        recent_reports = db.query(AcademicReport).filter(
-            AcademicReport.user_id == user_id
-        ).order_by(desc(AcademicReport.report_date)).limit(5).all()
-        
-        # Convert recent reports to ReportResponse format (simplified)
-        from models import ReportResponse
-        recent_reports_response = [ReportResponse.model_validate(r) for r in recent_reports]
-        
+        subject_perfs = get_subject_performance(user_id)
+
+        strong_subjects = [sp for sp in subject_perfs if sp['strength_score'] >= 70]
+        weak_subjects = [sp for sp in subject_perfs if sp['strength_score'] < 60]
+        improving = [sp['subject'] for sp in subject_perfs if sp['trend'] == "improving"]
+        declining = [sp['subject'] for sp in subject_perfs if sp['trend'] == "declining"]
+
+        # Get recent reports (up to 5)
+        recent_reports = reports[:5]
+
+        # Convert to response format
+        from models import ReportResponse, SubjectPerformanceResponse
+        recent_reports_response = []
+        for report in recent_reports:
+            # Convert datetime string back to datetime for validation
+            report_copy = report.copy()
+            report_copy['report_date'] = datetime.fromisoformat(report['report_date'])
+            recent_reports_response.append(ReportResponse.model_validate(report_copy))
+
         return PerformanceDashboard(
-            overall_gpa=latest_report.overall_gpa or 0.0,
-            total_subjects=len(latest_report.grades_json),
+            overall_gpa=latest_report.get('overall_gpa', 0.0) or 0.0,
+            total_subjects=len(latest_report.get('grades_json', {})),
+            subject_performance=[SubjectPerformanceResponse.model_validate(sp) for sp in subject_perfs],
             strong_subjects=[SubjectPerformanceResponse.model_validate(sp) for sp in strong_subjects],
             weak_subjects=[SubjectPerformanceResponse.model_validate(sp) for sp in weak_subjects],
             improving_subjects=improving,
@@ -250,11 +247,9 @@ class PerformanceService:
         )
     
     @staticmethod
-    def get_grade_trends(db: Session, user_id: int, subject: Optional[str] = None) -> List[GradeTrend]:
+    def get_grade_trends(user_id: int, subject: Optional[str] = None) -> List[GradeTrend]:
         """Get grade trends for subjects."""
-        reports = db.query(AcademicReport).filter(
-            AcademicReport.user_id == user_id
-        ).order_by(AcademicReport.report_date).all()
+        reports = get_user_reports(user_id)
         
         if not reports:
             return []
@@ -262,15 +257,19 @@ class PerformanceService:
         # Group by subject
         subject_data: Dict[str, List[Tuple[datetime, float]]] = {}
         for report in reports:
-            for subj, grade in report.grades_json.items():
+            # Convert report_date string to datetime object for proper sorting and comparison
+            report_date = datetime.fromisoformat(report['report_date'])
+            for subj, grade in report['grades_json'].items():
                 if subject and subj != subject:
                     continue
                 if subj not in subject_data:
                     subject_data[subj] = []
-                subject_data[subj].append((report.report_date, grade_to_numeric(grade)))
+                subject_data[subj].append((report_date, grade_to_numeric(grade)))
         
         trends = []
         for subj, data in subject_data.items():
+            # Sort data by date before extracting
+            data.sort(key=lambda x: x[0])
             dates = [d[0] for d in data]
             grades = [d[1] for d in data]
             trend = analyze_grade_trend(grades)
@@ -287,12 +286,10 @@ class PerformanceService:
         return trends
     
     @staticmethod
-    async def get_predictions(db: Session, user_id: int) -> List[PerformancePrediction]:
+    async def get_predictions(user_id: int) -> List[PerformancePrediction]:
         """Get performance predictions using LLM."""
         # Get grade history
-        reports = db.query(AcademicReport).filter(
-            AcademicReport.user_id == user_id
-        ).order_by(AcademicReport.report_date).all()
+        reports = get_user_reports(user_id)
         
         if not reports:
             return []
@@ -300,7 +297,7 @@ class PerformanceService:
         # Build grade history by subject
         grade_history: Dict[str, List[float]] = {}
         for report in reports:
-            for subject, grade in report.grades_json.items():
+            for subject, grade in report['grades_json'].items():
                 if subject not in grade_history:
                     grade_history[subject] = []
                 grade_history[subject].append(grade_to_numeric(grade))
@@ -334,14 +331,13 @@ class FlashcardService:
     
     @staticmethod
     async def generate_flashcards(
-        db: Session,
         user_id: int,
         subject: str,
         topic: Optional[str],
         count: int,
         grade_level: int,
         curriculum: str
-    ) -> List[Flashcard]:
+    ) -> List[Dict[str, Any]]:
         """Generate flashcards using LLM."""
         flashcards_data = await llm_service.generate_flashcards(
             subject=subject,
@@ -353,108 +349,112 @@ class FlashcardService:
         
         flashcards = []
         for card_data in flashcards_data:
-            difficulty = DifficultyLevel(card_data.get("difficulty", "medium"))
-            flashcard = Flashcard(
-                user_id=user_id,
-                subject=subject,
-                topic=topic,
-                question=card_data.get("question", ""),
-                answer=card_data.get("answer", ""),
-                difficulty=difficulty
-            )
-            db.add(flashcard)
-            flashcards.append(flashcard)
+            difficulty = card_data.get("difficulty", "medium")
+            flashcard = create_flashcard({
+                "user_id": user_id,
+                "subject": subject,
+                "topic": topic,
+                "question": card_data.get("question", ""),
+                "answer": card_data.get("answer", ""),
+                "difficulty": difficulty,
+                "is_active": True,
+                "times_reviewed": 0,
+                "times_correct": 0,
+                "next_review_date": datetime.utcnow().isoformat()
+            })
+            if flashcard:
+                flashcards.append(flashcard)
         
-        db.commit()
         return flashcards
     
     @staticmethod
     def review_flashcard(
-        db: Session,
         card_id: int,
         user_id: int,
         correct: bool,
         user_answer: Optional[str] = None
     ) -> FlashcardReview:
         """Record a flashcard review."""
-        flashcard = db.query(Flashcard).filter(
-            Flashcard.card_id == card_id,
-            Flashcard.user_id == user_id
-        ).first()
+        existing_flashcard = supabase.table('flashcards').select('*').eq('card_id', card_id).eq('user_id', user_id).execute()
+        flashcard = existing_flashcard.data[0] if existing_flashcard.data else None
         
         if not flashcard:
             raise ValueError("Flashcard not found")
         
         # Update flashcard stats
-        flashcard.times_reviewed += 1
+        times_reviewed = flashcard.get('times_reviewed', 0) + 1
+        times_correct = flashcard.get('times_correct', 0)
         if correct:
-            flashcard.times_correct += 1
-        flashcard.last_reviewed = datetime.utcnow()
+            times_correct += 1
+        last_reviewed = datetime.utcnow().isoformat()
         
-        # Calculate and update mastery level
+        # Calculate and update mastery level (for logic, not directly stored in DB currently)
         mastery = calculate_mastery_level(
-            flashcard.times_reviewed,
-            flashcard.times_correct,
-            flashcard.difficulty.value
+            times_reviewed,
+            times_correct,
+            flashcard.get('difficulty', 'medium')
         )
-        # Store mastery as percentage (0-100) in a computed property or calculate on-the-fly
-        # Since database doesn't have mastery_level column, we calculate it when needed
         
         # Calculate next review date
-        flashcard.next_review_date = calculate_next_review_date(
-            flashcard.last_reviewed,
-            flashcard.difficulty.value,
+        next_review_date = calculate_next_review_date(
+            datetime.fromisoformat(last_reviewed),
+            flashcard.get('difficulty', 'medium'),
             correct,
-            flashcard.times_reviewed
-        )
+            times_reviewed
+        ).isoformat()
         
         # Adjust difficulty
-        flashcard.difficulty = DifficultyLevel(adjust_difficulty(
-            flashcard.difficulty.value,
-            flashcard.times_reviewed,
-            flashcard.times_correct
-        ))
-        
-        # Create review record
-        review = FlashcardReview(
-            card_id=card_id,
-            user_id=user_id,
-            correct=correct,
-            user_answer=user_answer
+        new_difficulty = adjust_difficulty(
+            flashcard.get('difficulty', 'medium'),
+            times_reviewed,
+            times_correct
         )
         
-        db.add(review)
-        db.commit()
-        db.refresh(review)
+        update_data = {
+            'times_reviewed': times_reviewed,
+            'times_correct': times_correct,
+            'last_reviewed': last_reviewed,
+            'next_review_date': next_review_date,
+            'difficulty': new_difficulty
+        }
         
-        return review
+        supabase.table('flashcards').update(update_data).eq('card_id', card_id).execute()
+        
+        # Create review record
+        review_data = {
+            'card_id': card_id,
+            'user_id': user_id,
+            'correct': correct,
+            'user_answer': user_answer,
+            'reviewed_at': datetime.utcnow().isoformat()
+        }
+        create_flashcard_review(review_data)
+        
+        return {"message": "Review recorded", "mastery_level": mastery * 100}
     
     @staticmethod
     async def evaluate_answer(
-        db: Session,
         card_id: int,
         user_id: int,
         user_answer: str
     ) -> Dict:
         """Evaluate student's answer using LLM."""
-        flashcard = db.query(Flashcard).filter(
-            Flashcard.card_id == card_id,
-            Flashcard.user_id == user_id
-        ).first()
+        flashcard_response = supabase.table('flashcards').select('*').eq('card_id', card_id).eq('user_id', user_id).execute()
+        flashcard = flashcard_response.data[0] if flashcard_response.data else None
         
         if not flashcard:
             raise ValueError("Flashcard not found")
         
         evaluation = await llm_service.evaluate_answer(
-            question=flashcard.question,
-            correct_answer=flashcard.answer,
+            question=flashcard['question'],
+            correct_answer=flashcard['answer'],
             student_answer=user_answer,
-            subject=flashcard.subject
+            subject=flashcard['subject']
         )
         
         # Record review
         FlashcardService.review_flashcard(
-            db, card_id, user_id, evaluation.get("correct", False), user_answer
+            card_id, user_id, evaluation.get("correct", False), user_answer
         )
         
         return evaluation
@@ -467,21 +467,20 @@ class CareerService:
     
     @staticmethod
     async def generate_recommendations(
-        db: Session,
         user_id: int,
         interests: Optional[List[str]] = None
-    ) -> List[CareerRecommendation]:
+    ) -> List[Dict[str, Any]]:
         """Generate career recommendations using LLM."""
         # Get user's latest grades
-        latest_report = db.query(AcademicReport).filter(
-            AcademicReport.user_id == user_id
-        ).order_by(desc(AcademicReport.report_date)).first()
+        latest_report_response = supabase.table('academic_reports').select('*').eq('user_id', user_id).order('report_date', desc=True).limit(1).execute()
+        latest_report = latest_report_response.data[0] if latest_report_response.data else None
         
         if not latest_report:
             raise ValueError("No academic reports found. Please upload a report first.")
         
-        user = db.query(User).filter(User.user_id == user_id).first()
-        grades = latest_report.grades_json
+        user_response = supabase.table('users').select('*').eq('user_id', user_id).limit(1).execute()
+        user = user_response.data[0] if user_response.data else None
+        grades = latest_report['grades_json']
         subjects = list(grades.keys())
         
         # Get LLM recommendations
@@ -489,31 +488,28 @@ class CareerService:
             subjects=subjects,
             grades=grades,
             interests=interests,
-            grade_level=user.grade_level or 10
+            grade_level=user['grade_level'] if user and 'grade_level' in user else 10
         )
         
         # Delete old recommendations
-        db.query(CareerRecommendation).filter(
-            CareerRecommendation.user_id == user_id
-        ).delete()
+        supabase.table('career_recommendations').delete().eq('user_id', user_id).execute()
         
         # Create new recommendations
         recommendations = []
         for rec_data in recommendations_data:
-            rec = CareerRecommendation(
-                user_id=user_id,
-                career_path=rec_data.get("career_path", ""),
-                career_description=rec_data.get("career_description"),
-                suitable_universities=rec_data.get("suitable_universities", []),
-                course_requirements=rec_data.get("course_requirements", {}),
-                match_score=rec_data.get("match_score", 0.0),
-                reasoning=rec_data.get("reasoning"),
-                job_market_outlook=rec_data.get("job_market_outlook")
-            )
-            db.add(rec)
-            recommendations.append(rec)
+            rec = create_career_recommendation({
+                "user_id": user_id,
+                "career_path": rec_data.get("career_path", ""),
+                "career_description": rec_data.get("career_description"),
+                "suitable_universities": rec_data.get("suitable_universities", []),
+                "course_requirements": rec_data.get("course_requirements", {}),
+                "match_score": rec_data.get("match_score", 0.0),
+                "reasoning": rec_data.get("reasoning"),
+                "job_market_outlook": rec_data.get("job_market_outlook")
+            })
+            if rec:
+                recommendations.append(rec)
         
-        db.commit()
         return recommendations
 
 
@@ -524,26 +520,23 @@ class StudyPlanService:
     
     @staticmethod
     async def generate_study_plan(
-        db: Session,
         user_id: int,
         subjects: List[str],
         available_hours: float,
         exam_date: Optional[datetime] = None,
-        focus_areas: Optional[Dict[str, List[str]]] = None
-    ) -> List[StudyPlan]:
+        focus_areas: Optional[Dict[str, List[str]]] = None,
+        priority: Optional[int] = 5, # Added priority parameter
+        active_days: Optional[List[str]] = None # Added active_days parameter
+    ) -> List[Dict[str, Any]]:
         """Generate study plans using LLM."""
         # Get weak subjects
-        weak_subjects = db.query(SubjectPerformance).filter(
-            SubjectPerformance.user_id == user_id,
-            SubjectPerformance.subject.in_(subjects),
-            SubjectPerformance.strength_score < 60
-        ).all()
-        
-        weak_subject_names = [sp.subject for sp in weak_subjects] if weak_subjects else subjects
+        weak_subjects_response = supabase.table('subject_performance').select('subject').eq('user_id', user_id).in_('subject', subjects).lt('strength_score', 60).execute()
+        weak_subject_names = [sp['subject'] for sp in weak_subjects_response.data] if weak_subjects_response.data else subjects
         
         # Get user's grade level for better LLM context
-        user = db.query(User).filter(User.user_id == user_id).first()
-        grade_level = user.grade_level if user and user.grade_level else 10
+        user_response = supabase.table('users').select('grade_level').eq('user_id', user_id).limit(1).execute()
+        user = user_response.data[0] if user_response.data else None
+        grade_level = user['grade_level'] if user and 'grade_level' in user else 10
         
         # Get LLM plan with retry logic
         import logging
@@ -596,21 +589,36 @@ class StudyPlanService:
         if not weekly_schedule:
             from datetime import timedelta
             days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-            weekly_schedule = []
+            
+            # Filter days based on active_days if provided, otherwise use all days
+            effective_days = active_days if active_days is not None and len(active_days) > 0 else days
+            
+            weekly_schedule_data = []
             for i, day in enumerate(days):
-                # Distribute subjects across the week
-                subject_index = i % len(subjects) if subjects else 0
-                if subjects:
-                    weekly_schedule.append({
+                if day in effective_days: # Only add active days
+                    # Distribute subjects across the week for active days
+                    subject_index = i % len(subjects) if subjects else 0
+                    if subjects:
+                        weekly_schedule_data.append({
+                            "day": day,
+                            "is_active": True, # Mark as active
+                            "subjects": [{
+                                "subject": subjects[subject_index],
+                                "duration_minutes": int((available_hours * 60) / len(effective_days)), # Divide by active days
+                                "focus": f"Review key concepts and practice problems",
+                                "priority": 8 if subjects[subject_index] in weak_subject_names else 5
+                            }]
+                        })
+                else:
+                    weekly_schedule_data.append({
                         "day": day,
-                        "subjects": [{
-                            "subject": subjects[subject_index],
-                            "duration_minutes": int((available_hours * 60) / len(subjects)),
-                            "focus": f"Review key concepts and practice problems",
-                            "priority": 8 if subjects[subject_index] in weak_subject_names else 5
-                        }]
+                        "is_active": False, # Mark as inactive
+                        "subjects": [],
+                        "duration_minutes": 0,
+                        "focus": "",
+                        "priority": 0
                     })
-
+            weekly_schedule = weekly_schedule_data
         for subject in subjects:
             # Calculate duration based on priority
             priority = 5
@@ -628,7 +636,10 @@ class StudyPlanService:
                     llm_focus = str(focus_areas_from_llm[subject] or "").strip()
                     if llm_focus and llm_focus != f"Core concepts and fundamentals of {subject}":
                         # LLM provided specific focus areas, use them but ensure user topics are mentioned
-                        focus_area = f"{llm_focus} (Emphasizing: {topics})"
+                        if subject.lower() == "kiswahili":
+                            focus_area = f"{llm_focus} (Mkazo: {topics})"
+                        else:
+                            focus_area = f"{llm_focus} (Emphasizing: {topics})"
                         logger.info(f"Using LLM-generated focus area for {subject} with user topics: {focus_area[:100]}")
                     else:
                         focus_area = f"Focus on: {topics}"
@@ -684,46 +695,50 @@ class StudyPlanService:
                                 else:
                                     subj_entry["focus"] = topics
 
-            plan = StudyPlan(
-                user_id=user_id,
-                subject=subject,
-                focus_area=focus_area,
-                start_date=datetime.utcnow(),
-                end_date=exam_date if exam_date else (datetime.utcnow() + timedelta(days=90)),
-                daily_duration_minutes=daily_duration,
-                priority=priority,
-                status=PlanStatus.ACTIVE,
-                study_strategy=study_strategy,
-                weekly_schedule_json=weekly_schedule  # Persist the weekly schedule
-            )
-            db.add(plan)
-            plans.append(plan)
+            plan = create_study_plan({
+                "user_id": user_id,
+                "subject": subject,
+                "focus_area": focus_area,
+                "start_date": datetime.utcnow().isoformat(),
+                "end_date": (exam_date if exam_date else (datetime.utcnow() + timedelta(days=90))).isoformat(),
+                "daily_duration_minutes": daily_duration,
+                "priority": priority,
+                "status": "ACTIVE", # Use string value
+                "study_strategy": study_strategy,
+                "weekly_schedule_json": weekly_schedule
+            })
+            if plan:
+                plans.append(plan)
 
-        db.commit()
         return plans
 
     @staticmethod
-    def get_plan_by_id(db: Session, plan_id: int) -> StudyPlanResponse:
+    def get_plan_by_id(plan_id: int) -> Dict[str, Any]:
         """Get study plan by ID with sessions and weekly schedule."""
-        plan = db.query(StudyPlan).filter(StudyPlan.plan_id == plan_id).first()
+        plan_response = supabase.table('study_plans').select('*').eq('plan_id', plan_id).execute()
+        plan = plan_response.data[0] if plan_response.data else None
         if not plan:
             raise ValueError("Study plan not found")
         
         # Get sessions
-        sessions = db.query(StudySession).filter(StudySession.plan_id == plan_id).all()
+        sessions_response = supabase.table('study_sessions').select('*').eq('plan_id', plan_id).execute()
+        sessions = sessions_response.data
         
         # Convert to response models
-        weekly_schedule = plan.weekly_schedule_json or []
+        weekly_schedule = plan.get('weekly_schedule_json', []) or []
         session_responses = [StudySessionResponse.model_validate(s) for s in sessions]
         
         # Create response with additional fields
         response_data = {
-            **plan.__dict__,
+            **plan,
             "weekly_schedule": weekly_schedule,
             "sessions": session_responses
         }
-        
-        return StudyPlanResponse.model_validate(response_data)
+
+        # Explicitly ensure strategy field is set
+        response_data["strategy"] = plan.get('study_strategy', '')
+
+        return response_data
 
 
 # ==================== INSIGHT SERVICES ====================
@@ -733,14 +748,12 @@ class InsightService:
     
     @staticmethod
     async def generate_feedback(
-        db: Session,
         user_id: int
     ) -> AcademicFeedback:
         """Generate academic feedback using LLM."""
         # Get latest reports
-        reports = db.query(AcademicReport).filter(
-            AcademicReport.user_id == user_id
-        ).order_by(desc(AcademicReport.report_date)).limit(2).all()
+        reports_response = supabase.table('academic_reports').select('*').eq('user_id', user_id).order('report_date', desc=True).limit(2).execute()
+        reports = reports_response.data
         
         if not reports:
             return AcademicFeedback(
@@ -751,10 +764,11 @@ class InsightService:
                 next_steps=["Upload academic report"]
             )
         
-        current = reports[0].grades_json
-        previous = reports[1].grades_json if len(reports) > 1 else None
+        current = reports[0]['grades_json']
+        previous = reports[1]['grades_json'] if len(reports) > 1 else None
         
-        user = db.query(User).filter(User.user_id == user_id).first()
+        user_response = supabase.table('users').select('*').eq('user_id', user_id).limit(1).execute()
+        user = user_response.data[0] if user_response.data else None
         if not user:
             return AcademicFeedback(
                 strengths=[],
@@ -767,8 +781,8 @@ class InsightService:
         feedback = await llm_service.generate_academic_feedback(
             current_grades=current,
             previous_grades=previous,
-            grade_level=user.grade_level or 10,
-            curriculum=user.curriculum_type.value if user.curriculum_type else "CBC"
+            grade_level=user.get('grade_level', 10),
+            curriculum=user.get('curriculum_type', 'CBE')
         )
         
         # Save as insight
@@ -777,69 +791,67 @@ class InsightService:
         
         try:
             # Create feedback insight
-            feedback_insight = LearningInsight(
-                user_id=user_id,
-                insight_type=InsightType.FEEDBACK,
-                title="Academic Feedback",
-                content=feedback.get("motivational_message", "Academic feedback generated."),
-                metadata_json=feedback
-            )
-            db.add(feedback_insight)
+            feedback_insight_data = {
+                "user_id": user_id,
+                "insight_type": "feedback", # Use string literal
+                "title": "Academic Feedback",
+                "content": feedback.get("motivational_message", "Academic feedback generated."),
+                "metadata_json": feedback
+            }
+            feedback_insight = create_learning_insight(feedback_insight_data)
             
             # Create additional insights from recommendations
-            if feedback.get("recommendations"):
+            if feedback.get("recommendations") and feedback_insight:
                 for i, rec in enumerate(feedback.get("recommendations", [])[:5]):  # Limit to 5
-                    rec_insight = LearningInsight(
-                        user_id=user_id,
-                        insight_type=InsightType.RECOMMENDATION,
-                        title=f"Study Recommendation {i+1}",
-                        content=rec,
-                        metadata_json={"source": "academic_feedback", "related_feedback": feedback_insight.insight_id}
-                    )
-                    db.add(rec_insight)
+                    rec_insight_data = {
+                        "user_id": user_id,
+                        "insight_type": "recommendation", # Use string literal
+                        "title": f"Study Recommendation {i+1}",
+                        "content": rec,
+                        "metadata_json": {"source": "academic_feedback", "related_feedback": feedback_insight['insight_id']}
+                    }
+                    create_learning_insight(rec_insight_data)
             
             # Create insights from strengths
             if feedback.get("strengths"):
                 strengths_text = "Your academic strengths:\n" + "\n".join(f"• {s}" for s in feedback.get("strengths", []))
-                strength_insight = LearningInsight(
-                    user_id=user_id,
-                    insight_type=InsightType.ANALYSIS,
-                    title="Academic Strengths",
-                    content=strengths_text,
-                    metadata_json={"source": "academic_feedback", "type": "strengths"}
-                )
-                db.add(strength_insight)
+                strength_insight_data = {
+                    "user_id": user_id,
+                    "insight_type": "analysis", # Use string literal
+                    "title": "Academic Strengths",
+                    "content": strengths_text,
+                    "metadata_json": {"source": "academic_feedback", "type": "strengths"}
+                }
+                create_learning_insight(strength_insight_data)
             
             # Create insights from weaknesses
             if feedback.get("weaknesses"):
                 weaknesses_text = "Areas for improvement:\n" + "\n".join(f"• {w}" for w in feedback.get("weaknesses", []))
-                weakness_insight = LearningInsight(
-                    user_id=user_id,
-                    insight_type=InsightType.ANALYSIS,
-                    title="Areas for Improvement",
-                    content=weaknesses_text,
-                    metadata_json={"source": "academic_feedback", "type": "weaknesses"}
-                )
-                db.add(weakness_insight)
+                weakness_insight_data = {
+                    "user_id": user_id,
+                    "insight_type": "analysis", # Use string literal
+                    "title": "Areas for Improvement",
+                    "content": weaknesses_text,
+                    "metadata_json": {"source": "academic_feedback", "type": "weaknesses"}
+                }
+                create_learning_insight(weakness_insight_data)
             
             # Create tips insight from next steps
             if feedback.get("next_steps"):
                 tips_text = "Recommended next steps:\n" + "\n".join(f"• {step}" for step in feedback.get("next_steps", []))
-                tips_insight = LearningInsight(
-                    user_id=user_id,
-                    insight_type=InsightType.TIP,
-                    title="Learning Tips",
-                    content=tips_text,
-                    metadata_json={"source": "academic_feedback", "type": "next_steps"}
-                )
-                db.add(tips_insight)
+                tips_insight_data = {
+                    "user_id": user_id,
+                    "insight_type": "tip", # Use string literal
+                    "title": "Learning Tips",
+                    "content": tips_text,
+                    "metadata_json": {"source": "academic_feedback", "type": "next_steps"}
+                }
+                create_learning_insight(tips_insight_data)
             
-            db.commit()
             logger.info(f"Successfully created insights for user {user_id}")
         except Exception as e:
             # Log error but don't fail the request
             logger.warning(f"Could not save insights: {e}", exc_info=True)
-            db.rollback()
         
         return AcademicFeedback(**feedback)
 
@@ -856,7 +868,7 @@ class InviteService:
         return ''.join(secrets.choice(alphabet) for _ in range(8))
     
     @staticmethod
-    def create_invite_code(db: Session, creator_id: int, creator_type: UserType) -> InviteCode:
+    def create_invite_code(creator_id: int, creator_type: UserType) -> Dict[str, Any]:
         """Create a new invite code for a teacher or parent."""
         # Validate creator type
         if creator_type not in [UserType.TEACHER, UserType.PARENT]:
@@ -864,78 +876,68 @@ class InviteService:
         
         # Generate unique code
         code = InviteService.generate_code()
-        while db.query(InviteCode).filter(InviteCode.code == code).first():
+        while supabase.table('invite_codes').select('*').eq('code', code).execute().data:
             code = InviteService.generate_code()
         
         # Create invite code (expires in 7 days)
-        invite = InviteCode(
-            code=code,
-            creator_id=creator_id,
-            creator_type=creator_type,
-            expires_at=datetime.utcnow() + timedelta(days=7)
-        )
+        invite_data = {
+            "code": code,
+            "creator_id": creator_id,
+            "creator_type": creator_type.value, # Use string value
+            "expires_at": (datetime.utcnow() + timedelta(days=7)).isoformat(),
+            "used": False
+        }
+        response = supabase.table('invite_codes').insert(invite_data).execute()
         
-        db.add(invite)
-        db.commit()
-        db.refresh(invite)
-        
-        return invite
+        return response.data[0]
     
     @staticmethod
-    def get_my_codes(db: Session, user_id: int) -> List[InviteCode]:
+    def get_my_codes(user_id: int) -> List[Dict[str, Any]]:
         """Get all invite codes created by a user."""
-        return db.query(InviteCode).filter(
-            InviteCode.creator_id == user_id
-        ).order_by(InviteCode.created_at.desc()).all()
+        response = supabase.table('invite_codes').select('*').eq('creator_id', user_id).order('created_at', desc=True).execute()
+        return response.data
     
     @staticmethod
-    def redeem_code(db: Session, code: str, student_id: int) -> UserRelationship:
+    def redeem_code(code: str, student_id: int) -> Dict[str, Any]:
         """Redeem an invite code and create a relationship."""
         # Find the invite code
-        invite = db.query(InviteCode).filter(
-            InviteCode.code == code.upper()
-        ).first()
+        invite_response = supabase.table('invite_codes').select('*').eq('code', code.upper()).execute()
+        invite = invite_response.data[0] if invite_response.data else None
         
         if not invite:
             raise ValueError("Invalid invite code")
         
-        if invite.used:
+        if invite['used']:
             raise ValueError("This invite code has already been used")
         
-        if invite.expires_at < datetime.utcnow():
+        if datetime.fromisoformat(invite['expires_at']) < datetime.utcnow():
             raise ValueError("This invite code has expired")
         
         # Verify the redeemer is a student
-        student = db.query(User).filter(User.user_id == student_id).first()
-        if not student or student.user_type != UserType.STUDENT:
+        student_response = supabase.table('users').select('*').eq('user_id', student_id).limit(1).execute()
+        student = student_response.data[0] if student_response.data else None
+        if not student or student.get('user_type') != 'STUDENT':
             raise ValueError("Only students can redeem invite codes")
         
         # Check if relationship already exists
-        existing = db.query(UserRelationship).filter(
-            UserRelationship.guardian_id == invite.creator_id,
-            UserRelationship.student_id == student_id
-        ).first()
-        
-        if existing:
+        existing_rel_response = supabase.table('user_relationships').select('*').eq('guardian_id', invite['creator_id']).eq('student_id', student_id).execute()
+        if existing_rel_response.data:
             raise ValueError("You are already linked to this teacher/parent")
         
         # Determine relationship type
-        relationship_type = "teacher-student" if invite.creator_type == UserType.TEACHER else "parent-child"
+        relationship_type = "teacher-student" if invite.get('creator_type') == 'TEACHER' else "parent-child"
         
         # Create relationship
-        relationship = UserRelationship(
-            guardian_id=invite.creator_id,
-            student_id=student_id,
-            relationship_type=relationship_type
-        )
+        relationship_data = {
+            "guardian_id": invite['creator_id'],
+            "student_id": student_id,
+            "relationship_type": relationship_type
+        }
+        relationship_response = supabase.table('user_relationships').insert(relationship_data).execute()
+        relationship = relationship_response.data[0] if relationship_response.data else None
         
         # Mark invite as used
-        invite.used = True
-        invite.used_by = student_id
-        
-        db.add(relationship)
-        db.commit()
-        db.refresh(relationship)
+        supabase.table('invite_codes').update({'used': True, 'used_by': student_id}).eq('code', code.upper()).execute()
         
         return relationship
 
@@ -946,80 +948,79 @@ class RelationshipService:
     """Service for managing user relationships."""
     
     @staticmethod
-    def get_linked_students(db: Session, guardian_id: int) -> List[LinkedStudentResponse]:
+    def get_linked_students(guardian_id: int) -> List[Dict[str, Any]]:
         """Get all students linked to a teacher/parent."""
-        relationships = db.query(UserRelationship).filter(
-            UserRelationship.guardian_id == guardian_id
-        ).all()
+        relationships_response = supabase.table('user_relationships').select('*').eq('guardian_id', guardian_id).execute()
+        relationships = relationships_response.data
         
-        students = []
+        students_data = []
         for rel in relationships:
-            student = db.query(User).filter(User.user_id == rel.student_id).first()
+            student_response = supabase.table('users').select('*').eq('user_id', rel['student_id']).limit(1).execute()
+            student = student_response.data[0] if student_response.data else None
             if student:
-                students.append(LinkedStudentResponse(
-                    user_id=student.user_id,
-                    full_name=student.full_name,
-                    email=student.email,
-                    grade_level=student.grade_level,
-                    school_name=student.school_name,
-                    relationship_type=rel.relationship_type,
-                    linked_at=rel.created_at
-                ))
+                students_data.append({
+                    "user_id": student['user_id'],
+                    "full_name": student['full_name'],
+                    "email": student['email'],
+                    "grade_level": student.get('grade_level'),
+                    "school_name": student.get('school_name'),
+                    "profile_picture": student.get('profile_picture'),
+                    "relationship_type": rel['relationship_type'],
+                    "linked_at": rel['created_at']
+                })
         
-        return students
+        return students_data
     
     @staticmethod
-    def get_linked_guardians(db: Session, student_id: int) -> List[LinkedGuardianResponse]:
+    def get_linked_guardians(student_id: int) -> List[Dict[str, Any]]:
         """Get all teachers/parents linked to a student."""
-        relationships = db.query(UserRelationship).filter(
-            UserRelationship.student_id == student_id
-        ).all()
+        relationships_response = supabase.table('user_relationships').select('*').eq('student_id', student_id).execute()
+        relationships = relationships_response.data
         
-        guardians = []
+        guardians_data = []
         for rel in relationships:
-            guardian = db.query(User).filter(User.user_id == rel.guardian_id).first()
+            guardian_response = supabase.table('users').select('*').eq('user_id', rel['guardian_id']).limit(1).execute()
+            guardian = guardian_response.data[0] if guardian_response.data else None
             if guardian:
-                guardians.append(LinkedGuardianResponse(
-                    user_id=guardian.user_id,
-                    full_name=guardian.full_name,
-                    email=guardian.email,
-                    user_type=guardian.user_type,
-                    relationship_type=rel.relationship_type,
-                    linked_at=rel.created_at
-                ))
+                guardians_data.append({
+                    "user_id": guardian['user_id'],
+                    "full_name": guardian['full_name'],
+                    "email": guardian['email'],
+                    "profile_picture": guardian.get('profile_picture'),
+                    "user_type": guardian['user_type'],
+                    "relationship_type": rel['relationship_type'],
+                    "linked_at": rel['created_at']
+                })
         
-        return guardians
+        return guardians_data
     
     @staticmethod
-    def verify_relationship(db: Session, guardian_id: int, student_id: int) -> bool:
+    def verify_relationship(guardian_id: int, student_id: int) -> bool:
         """Verify that a relationship exists between guardian and student."""
-        relationship = db.query(UserRelationship).filter(
-            UserRelationship.guardian_id == guardian_id,
-            UserRelationship.student_id == student_id
-        ).first()
-        return relationship is not None
+        relationship_response = supabase.table('user_relationships').select('*').eq('guardian_id', guardian_id).eq('student_id', student_id).execute()
+        return len(relationship_response.data) > 0
     
     @staticmethod
-    def get_student_dashboard(db: Session, guardian_id: int, student_id: int) -> StudentDashboardResponse:
+    def get_student_dashboard(guardian_id: int, student_id: int) -> StudentDashboardResponse:
         """Get dashboard data for a student (for teacher/parent view)."""
         # Verify relationship exists
-        if not RelationshipService.verify_relationship(db, guardian_id, student_id):
+        if not RelationshipService.verify_relationship(guardian_id, student_id):
             raise ValueError("You do not have permission to view this student's data")
         
         # Get student info
-        student = db.query(User).filter(User.user_id == student_id).first()
+        student_response = supabase.table('users').select('*').eq('user_id', student_id).limit(1).execute()
+        student = student_response.data[0] if student_response.data else None
         if not student:
             raise ValueError("Student not found")
         
         # Get latest report
-        latest_report = db.query(AcademicReport).filter(
-            AcademicReport.user_id == student_id
-        ).order_by(AcademicReport.report_date.desc()).first()
+        latest_report_response = supabase.table('academic_reports').select('*').eq('user_id', student_id).order('report_date', desc=True).limit(1).execute()
+        latest_report = latest_report_response.data[0] if latest_report_response.data else None
         
         if not latest_report:
             return StudentDashboardResponse(
                 student_id=student_id,
-                student_name=student.full_name,
+                student_name=student['full_name'],
                 overall_gpa=0.0,
                 total_subjects=0,
                 strong_subjects=[],
@@ -1030,46 +1031,41 @@ class RelationshipService:
             )
         
         # Get subject performances
-        subject_perfs = db.query(SubjectPerformance).filter(
-            SubjectPerformance.user_id == student_id
-        ).all()
+        subject_perfs_response = supabase.table('subject_performance').select('*').eq('user_id', student_id).execute()
+        subject_perfs = subject_perfs_response.data
         
-        strong_subjects = [sp.subject for sp in subject_perfs if sp.strength_score >= 70]
-        weak_subjects = [sp.subject for sp in subject_perfs if sp.strength_score < 60]
-        improving = [sp.subject for sp in subject_perfs if sp.trend == "improving"]
-        declining = [sp.subject for sp in subject_perfs if sp.trend == "declining"]
+        strong_subjects = [sp['subject'] for sp in subject_perfs if sp['strength_score'] >= 70]
+        weak_subjects = [sp['subject'] for sp in subject_perfs if sp['strength_score'] < 60]
+        improving = [sp['subject'] for sp in subject_perfs if sp['trend'] == "improving"]
+        declining = [sp['subject'] for sp in subject_perfs if sp['trend'] == "declining"]
         
         # Get recent reports
-        recent_reports = db.query(AcademicReport).filter(
-            AcademicReport.user_id == student_id
-        ).order_by(AcademicReport.report_date.desc()).limit(5).all()
+        recent_reports_response = supabase.table('academic_reports').select('*').eq('user_id', student_id).order('report_date', desc=True).limit(5).execute()
+        recent_reports = recent_reports_response.data
         
+        # Convert datetime strings back to datetime objects for validation
+        formatted_recent_reports = []
+        for report in recent_reports:
+            report_copy = report.copy()
+            report_copy['report_date'] = datetime.fromisoformat(report['report_date'])
+            formatted_recent_reports.append(ReportResponse.model_validate(report_copy))
+
         return StudentDashboardResponse(
             student_id=student_id,
-            student_name=student.full_name,
-            overall_gpa=latest_report.overall_gpa or 0.0,
-            total_subjects=len(latest_report.grades_json),
+            student_name=student['full_name'],
+            overall_gpa=latest_report.get('overall_gpa', 0.0) or 0.0,
+            total_subjects=len(latest_report.get('grades_json', {})),
             strong_subjects=strong_subjects,
             weak_subjects=weak_subjects,
-            recent_reports=[ReportResponse.model_validate(r) for r in recent_reports],
+            recent_reports=formatted_recent_reports,
             improving_subjects=improving,
             declining_subjects=declining
         )
     
     @staticmethod
-    def remove_relationship(db: Session, guardian_id: int, student_id: int) -> bool:
+    def remove_relationship(guardian_id: int, student_id: int) -> bool:
         """Remove a relationship between guardian and student."""
-        relationship = db.query(UserRelationship).filter(
-            UserRelationship.guardian_id == guardian_id,
-            UserRelationship.student_id == student_id
-        ).first()
-        
-        if not relationship:
-            return False
-        
-        db.delete(relationship)
-        db.commit()
-        return True
-
+        relationship_response = supabase.table('user_relationships').delete().eq('guardian_id', guardian_id).eq('student_id', student_id).execute()
+        return len(relationship_response.data) > 0
 
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -110,15 +110,37 @@ const Reports = () => {
   };
 
   const getTrendIcon = (trend: string) => {
-    switch (trend) {
+    if (!trend) return <Minus className="w-4 h-4 text-muted-foreground" />;
+    switch (trend.toLowerCase()) {
+      case "improving":
       case "up":
         return <TrendingUp className="w-4 h-4 text-success" />;
+      case "declining":
       case "down":
         return <TrendingDown className="w-4 h-4 text-destructive" />;
+      case "stable":
       default:
         return <Minus className="w-4 h-4 text-muted-foreground" />;
     }
   };
+
+  const reportTrends = useMemo(() => {
+    const sorted = [...reports].sort((a, b) => new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime());
+    const trendsById: Record<number, "improving" | "declining" | "stable"> = {};
+    for (let i = 0; i < sorted.length; i++) {
+      const current = sorted[i];
+      const previous = sorted[i + 1];
+      if (!previous) {
+        trendsById[current.report_id] = "stable";
+        continue;
+      }
+      const delta = (current.overall_gpa || 0) - (previous.overall_gpa || 0);
+      if (delta > 0.05) trendsById[current.report_id] = "improving";
+      else if (delta < -0.05) trendsById[current.report_id] = "declining";
+      else trendsById[current.report_id] = "stable";
+    }
+    return trendsById;
+  }, [reports]);
 
   return (
     <DashboardLayout>
@@ -190,7 +212,7 @@ const Reports = () => {
                         Uploaded on {new Date(report.uploaded_at).toLocaleDateString()}
                       </CardDescription>
                     </div>
-                    <Minus className="w-4 h-4 text-muted-foreground" />
+                    {getTrendIcon(reportTrends[report.report_id] || "stable")}
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">

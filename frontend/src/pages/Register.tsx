@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -9,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { GraduationCap } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { register, login } from "@/lib/auth";
+import { ModeToggle } from "@/components/mode-toggle";
 
 const Register = () => {
   const navigate = useNavigate();
@@ -21,14 +23,43 @@ const Register = () => {
     confirmPassword: "",
     userType: "student",
     gradeLevel: "",
-    curriculum: "CBC",
+    curriculum: "CBE",
     phoneNumber: "",
     schoolName: "",
   });
 
+  // Dynamic grade options based on curriculum
+  const getGradeOptions = () => {
+    if (formData.curriculum === "8-4-4") {
+      return [
+        { value: "3", label: "Form 3" },
+        { value: "4", label: "Form 4" }
+      ];
+    } else {
+      // CBE grades
+      return [
+        { value: "7", label: "Grade 7" },
+        { value: "8", label: "Grade 8" },
+        { value: "9", label: "Grade 9" },
+        { value: "10", label: "Grade 10" },
+        { value: "11", label: "Grade 11" },
+        { value: "12", label: "Grade 12" }
+      ];
+    }
+  };
+
+  // Handle curriculum change - reset grade level when curriculum changes
+  const handleCurriculumChange = (value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      curriculum: value,
+      gradeLevel: "" // Reset grade level when curriculum changes
+    }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (formData.password !== formData.confirmPassword) {
       toast({
         title: "Passwords don't match",
@@ -47,6 +78,15 @@ const Register = () => {
       return;
     }
 
+    if (formData.userType === "student" && !formData.gradeLevel) {
+      toast({
+        title: "Grade level required",
+        description: "Please select your grade level.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -56,7 +96,7 @@ const Register = () => {
         full_name: formData.fullName,
         user_type: formData.userType,
         grade_level: formData.userType === "student" && formData.gradeLevel ? parseInt(formData.gradeLevel) : undefined,
-        curriculum_type: formData.userType === "student" ? formData.curriculum : "CBC",
+        curriculum_type: formData.userType === "student" ? formData.curriculum : "CBE",
       });
 
       // Auto-login after registration
@@ -79,7 +119,10 @@ const Register = () => {
   };
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-background via-muted to-background p-4 py-8">
+    <div className="relative min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-background via-muted to-background p-4">
+      <div className="absolute top-4 right-4">
+        <ModeToggle />
+      </div>
       <div className="w-full max-w-2xl">
         <div className="flex flex-col items-center mb-8">
           <div className="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center mb-4 shadow-lg">
@@ -125,9 +168,8 @@ const Register = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="password">Password</Label>
-                  <Input
+                  <PasswordInput
                     id="password"
-                    type="password"
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                     required
@@ -135,9 +177,8 @@ const Register = () => {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="confirmPassword">Confirm Password</Label>
-                  <Input
+                  <PasswordInput
                     id="confirmPassword"
-                    type="password"
                     value={formData.confirmPassword}
                     onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
                     required
@@ -174,17 +215,17 @@ const Register = () => {
                     <Select
                       value={formData.gradeLevel}
                       onValueChange={(value) => setFormData({ ...formData, gradeLevel: value })}
+                      required
                     >
                       <SelectTrigger id="gradeLevel">
                         <SelectValue placeholder="Select grade" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="7">Grade 7</SelectItem>
-                        <SelectItem value="8">Grade 8</SelectItem>
-                        <SelectItem value="9">Grade 9</SelectItem>
-                        <SelectItem value="10">Grade 10</SelectItem>
-                        <SelectItem value="11">Grade 11</SelectItem>
-                        <SelectItem value="12">Grade 12</SelectItem>
+                        {getGradeOptions().map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -192,12 +233,12 @@ const Register = () => {
                     <Label>Curriculum Type</Label>
                     <RadioGroup
                       value={formData.curriculum}
-                      onValueChange={(value) => setFormData({ ...formData, curriculum: value })}
+                      onValueChange={handleCurriculumChange}
                       className="flex gap-4"
                     >
                       <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="CBC" id="CBC" />
-                        <Label htmlFor="CBC" className="cursor-pointer">CBC</Label>
+                        <RadioGroupItem value="CBE" id="CBE" />
+                        <Label htmlFor="CBE" className="cursor-pointer">CBE</Label>
                       </div>
                       <div className="flex items-center space-x-2">
                         <RadioGroupItem value="8-4-4" id="8-4-4" />

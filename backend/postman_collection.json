@@ -37,7 +37,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"student@example.com\",\n  \"password\": \"securepass123\",\n  \"full_name\": \"John Doe\",\n  \"user_type\": \"student\",\n  \"grade_level\": 10,\n  \"curriculum_type\": \"CBC\"\n}"
+              "raw": "{\n  \"email\": \"student@example.com\",\n  \"password\": \"securepass123\",\n  \"full_name\": \"John Doe\",\n  \"user_type\": \"student\",\n  \"grade_level\": 10,\n  \"curriculum_type\": \"CBE\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/auth/register",

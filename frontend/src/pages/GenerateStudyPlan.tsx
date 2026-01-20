@@ -10,6 +10,8 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"; // Added Select import
+import { Toggle } from "@/components/ui/toggle"; // Added Toggle import
 import { ArrowLeft, Sparkles, Calendar as CalendarIcon, Clock, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
@@ -33,6 +35,7 @@ const GenerateStudyPlan = () => {
   const [hoursPerDay, setHoursPerDay] = useState([2]);
   const [examDate, setExamDate] = useState<Date>();
   const [focusAreas, setFocusAreas] = useState<Record<string, string>>({});
+  const [priority, setPriority] = useState("medium"); // New state for priority
   const [isGenerating, setIsGenerating] = useState(false);
   const [previewPlan, setPreviewPlan] = useState<{
     plan_id: number;
@@ -41,6 +44,7 @@ const GenerateStudyPlan = () => {
     examDate: Date;
     weeklySchedule: Array<{
       day?: string;
+      is_active?: boolean; // Added for active/inactive days
       subjects?: string[];
       subject?: string;
       duration?: number;
@@ -51,6 +55,27 @@ const GenerateStudyPlan = () => {
     strategies?: Record<string, string>;
     plans: unknown[];
   } | null>(null);
+
+  const [activeDays, setActiveDays] = useState<string[]>(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]); // New state for active days
+
+  const handleToggleDay = (day: string) => {
+    setActiveDays((prev) =>
+      prev.includes(day)
+        ? prev.filter((d) => d !== day)
+        : [...prev, day]
+    );
+
+    // Update the previewPlan's weeklySchedule to reflect the change
+    setPreviewPlan((prev) => {
+      if (!prev) return null;
+      const updatedSchedule = prev.weeklySchedule.map((scheduleDay) =>
+        scheduleDay.day === day
+          ? { ...scheduleDay, is_active: !prev.weeklySchedule.find(d => d.day === day)?.is_active }
+          : scheduleDay
+      );
+      return { ...prev, weeklySchedule: updatedSchedule };
+    });
+  };
 
   const toggleSubject = (subject: string) => {
     setSelectedSubjects((prev) =>
@@ -102,6 +127,8 @@ const GenerateStudyPlan = () => {
           available_hours_per_day: hoursPerDay[0],
           exam_date: examDate!.toISOString(),
           focus_areas: Object.keys(focusAreasDict).length > 0 ? focusAreasDict : undefined,
+          priority: priority,
+          active_days: activeDays, // Pass active days to backend
         }),
         new Promise((_, reject) =>
           setTimeout(() => reject(new Error("Request timeout. Please try again.")), 120000)
@@ -176,6 +203,7 @@ const GenerateStudyPlan = () => {
     const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
     return days.map((day) => ({
       day,
+      is_active: true, // Default to active
       subjects: selectedSubjects.slice(0, 2),
       duration: hoursPerDay[0] / 2,
     }));
@@ -306,20 +334,39 @@ const GenerateStudyPlan = () => {
                     <Clock className="w-4 h-4" />
                     Available Hours Per Day: {hoursPerDay[0]} hours
                   </label>
-                  <Slider
-                    value={hoursPerDay}
-                    onValueChange={setHoursPerDay}
-                    min={0.5}
-                    max={8}
-                    step={0.5}
-                    className="w-full"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Recommended: 2-4 hours per day for effective learning
-                  </p>
-                </div>
+                    <Slider
+                      value={hoursPerDay}
+                      onValueChange={setHoursPerDay}
+                      min={0.5}
+                      max={8}
+                      step={0.5}
+                      className="w-full"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Recommended: 2-4 hours per day for effective learning
+                    </p>
+                  </div>
 
-                <Separator />
+                  <Separator />
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Priority</label>
+                    <Select
+                      value={priority}
+                      onValueChange={setPriority}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select priority" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="low">Low</SelectItem>
+                        <SelectItem value="medium">Medium</SelectItem>
+                        <SelectItem value="high">High</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <Separator />
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium flex items-center gap-2">
@@ -450,14 +497,26 @@ const GenerateStudyPlan = () => {
 
                 <div>
                   <h3 className="font-semibold mb-3">Weekly Schedule</h3>
+                  <p className="text-sm text-muted-foreground mb-4">Toggle days on or off to customize your study week.</p>
                   {previewPlan.weeklySchedule && previewPlan.weeklySchedule.length > 0 ? (
                     <div className="space-y-2">
-                      {previewPlan.weeklySchedule.slice(0, 5).map((day, index: number) => (
+                      {(previewPlan.weeklySchedule || []).map((day, index: number) => (
                         <div
                           key={day.day || index}
-                          className="flex items-center justify-between p-3 rounded-lg border"
+                          className={`flex items-center justify-between p-3 rounded-lg border ${!activeDays.includes(day.day || '') ? 'bg-muted/50 opacity-70' : ''}`}
                         >
-                          <span className="font-medium">{day.day || `Day ${index + 1}`}</span>
+                          <div className="flex items-center gap-3">
+                            <Toggle
+                              pressed={activeDays.includes(day.day || '')}
+                              onPressedChange={() => handleToggleDay(day.day || '')}
+                              variant="outline"
+                              size="sm"
+                              aria-label={`Toggle ${day.day}`}
+                            >
+                              {activeDays.includes(day.day || '') ? 'Active' : 'Skipped'}
+                            </Toggle>
+                            <span className="font-medium">{day.day || `Day ${index + 1}`}</span>
+                          </div>
                           <div className="flex items-center gap-2">
                             {day.subjects && Array.isArray(day.subjects) ? (
                               <>
@@ -476,11 +535,6 @@ const GenerateStudyPlan = () => {
                           </div>
                         </div>
                       ))}
-                      {previewPlan.weeklySchedule.length > 5 && (
-                        <p className="text-sm text-muted-foreground text-center pt-2">
-                          ...and {previewPlan.weeklySchedule.length - 5} more days
-                        </p>
-                      )}
                     </div>
                   ) : (
                     <p className="text-sm text-muted-foreground">

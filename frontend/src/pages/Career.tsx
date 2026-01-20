@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,9 @@ const Career = () => {
   const { toast } = useToast();
   const [recommendations, setRecommendations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [favoritingIds, setFavoritingIds] = useState<Set<number>>(new Set());
+
+  const favoritingIdsLookup = useMemo(() => favoritingIds, [favoritingIds]);
 
   useEffect(() => {
     loadRecommendations();
@@ -38,6 +41,39 @@ const Career = () => {
     if (score >= 85) return "text-success";
     if (score >= 70) return "text-warning";
     return "text-muted-foreground";
+  };
+
+  const handleToggleFavorite = async (recommendationId: number, isFavorite: boolean) => {
+    if (favoritingIdsLookup.has(recommendationId)) return;
+    setFavoritingIds((prev) => new Set([...prev, recommendationId]));
+    try {
+      if (isFavorite) {
+        await careerApi.unfavorite(recommendationId);
+      } else {
+        await careerApi.favorite(recommendationId);
+      }
+      setRecommendations((prev) =>
+        prev.map((r) =>
+          (r.recommendation_id || r.career_id) === recommendationId ? { ...r, is_favorite: !isFavorite } : r
+        )
+      );
+      toast({
+        title: isFavorite ? "Removed" : "Saved",
+        description: isFavorite ? "Career removed from favorites" : "Career saved to favorites",
+      });
+    } catch (e) {
+      toast({
+        title: "Error",
+        description: e instanceof Error ? e.message : (isFavorite ? "Failed to remove favorite" : "Failed to save favorite"),
+        variant: "destructive",
+      });
+    } finally {
+      setFavoritingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(recommendationId);
+        return next;
+      });
+    }
   };
 
   return (
@@ -108,8 +144,14 @@ const Career = () => {
                 <CardHeader>
                   <div className="flex items-start justify-between mb-2">
                     <CardTitle className="text-lg">{rec.career_path || rec.career_name || rec.career || "Career Recommendation"}</CardTitle>
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                      <Star className="w-4 h-4" />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      disabled={favoritingIdsLookup.has(rec.recommendation_id || rec.career_id)}
+                      onClick={() => handleToggleFavorite(rec.recommendation_id || rec.career_id, !!rec.is_favorite)}
+                    >
+                      <Star className={`w-4 h-4 ${rec.is_favorite ? "fill-yellow-400" : ""}`} />
                     </Button>
                   </div>
                   <CardDescription className="line-clamp-2">
@@ -153,7 +195,7 @@ const Career = () => {
                   )}
 
                   <Link to={`/career/${rec.recommendation_id || rec.career_id}`}>
-                    <Button variant="outline" className="w-full" size="sm">
+                    <Button variant="outline" className="w-full mt-4" size="sm">
                       View Details
                       <ArrowRight className="w-4 h-4 ml-2" />
                     </Button>

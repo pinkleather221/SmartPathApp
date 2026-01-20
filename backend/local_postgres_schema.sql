@@ -18,8 +18,8 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash VARCHAR(255) NOT NULL,
     full_name VARCHAR(255) NOT NULL,
     user_type VARCHAR(50) NOT NULL DEFAULT 'student',
-    grade_level INTEGER CHECK (grade_level >= 7 AND grade_level <= 12),
-    curriculum_type VARCHAR(20) DEFAULT 'CBC',
+    grade_level INTEGER CHECK (grade_level >= 3 AND grade_level <= 12),
+    curriculum_type VARCHAR(20) DEFAULT 'CBE',
     phone_number VARCHAR(20),
     school_name VARCHAR(255),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -173,7 +173,7 @@ CREATE TRIGGER update_study_plans_updated_at BEFORE UPDATE ON study_plans
 /*
 -- Sample user
 INSERT INTO users (email, password_hash, full_name, user_type, grade_level, curriculum_type)
-VALUES ('student@example.com', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPjYfY8G6J6G', 'John Doe', 'student', 10, 'CBC')
+VALUES ('student@example.com', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPjYfY8G6J6G', 'John Doe', 'student', 10, 'CBE')
 ON CONFLICT (email) DO NOTHING;
 
 -- Sample academic report
