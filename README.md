@@ -17,9 +17,11 @@ SmartPath is a comprehensive educational platform designed specifically for Keny
 - **Grade Normalization**: Standardized grade processing for different Kenyan curricula
 
 ### 🧠 AI-Powered Learning Tools
+- **AI Tutor 🤖**: Interactive chat assistant for subject-specific help and writing guidance using Google Gemini
+- **Visual Math Solver ➗**: Upload problems or images to get step-by-step solutions
 - **Smart Flashcards**: Generate personalized flashcards using Google's Gemini AI
 - **Intelligent Study Plans**: Create customized study schedules based on performance data
-- **Career Recommendations**: AI-driven career guidance based on academic performance and interests
+- **Career Quiz & Guidance**: Interactive interest quiz and grade-based career matching
 - **Learning Insights**: Automated feedback and study tips
 
 ### 👥 Multi-User Collaboration
@@ -27,6 +29,11 @@ SmartPath is a comprehensive educational platform designed specifically for Keny
 - **Guardian-Student Linking**: Parents and teachers can monitor student progress
 - **Invite System**: Secure relationship management between students and guardians
 - **Shared Resources**: Collaborative learning materials and insights
+
+### 📚 Resource Library
+- **Digital Materials**: Access past papers, revision notes, and study guides
+- **Smart Search**: Filter resources by grade, subject, and topic
+- **Favorites**: Save important materials for quick access
 
 ### 🎯 Curriculum Support
 - **CBC & 8-4-4 Compatible**: Full support for both Kenyan curriculum systems
@@ -50,7 +57,7 @@ SmartPath App
     ├── models.py      # Pydantic Models
     ├── database.py    # Database Configuration
     ├── auth.py        # Authentication Logic
-    ├── services/      # Business Logic Services
+    ├── services.py    # Business Logic Services
     └── config.py      # Environment Configuration
 ```
 
@@ -173,9 +180,13 @@ services:
 
 ### Core Features
 - `POST /api/v1/reports/upload` - Upload academic reports with OCR
+- `POST /api/v1/chat/send` - Interact with the AI Tutor
+- `POST /api/v1/math/solve` - Solve math problems from text or image
 - `POST /api/v1/flashcards/generate` - Generate AI flashcards
 - `POST /api/v1/study-plans/generate` - Create personalized study plans
+- `POST /api/v1/career/quiz` - Submit interest quiz for career matching
 - `GET /api/v1/career/recommendations` - Get career suggestions
+- `GET /api/v1/resources` - Search the resource library
 
 ### Interactive API Docs
 When running locally, visit: `http://localhost:8000/docs`
@@ -244,6 +255,8 @@ When running locally, visit: `http://localhost:8000/docs`
 - **Vite** - Fast build tool and dev server
 - **Tailwind CSS** - Utility-first CSS framework
 - **shadcn/ui** - Modern component library
+- **Lucide React** - Beautiful iconography
+- **Next Themes** - Dark/Light mode support
 - **React Router** - Client-side routing
 - **React Query** - Powerful data synchronization
 - **Recharts** - Data visualization components
@@ -251,7 +264,7 @@ When running locally, visit: `http://localhost:8000/docs`
 ## ⚙️ Backend Technologies
 
 - **FastAPI** - High-performance async web framework
-- **PostgreSQL** - Robust relational database
+- **PostgreSQL & Supabase** - Robust database and storage solution
 - **SQLAlchemy** - ORM for database operations
 - **Pydantic** - Data validation and serialization
 - **Google AI (Gemini)** - AI-powered features
