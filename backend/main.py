@@ -78,6 +78,7 @@ app = FastAPI(
 )
 
 # Mount static files directory for uploaded files
+os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
 
 # Global exception handler
