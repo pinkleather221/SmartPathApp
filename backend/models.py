@@ -48,6 +48,14 @@ class DifficultyLevel(str, Enum):
     MEDIUM = "medium"
     HARD = "hard"
 
+    @classmethod
+    def _missing_(cls, value):
+        if isinstance(value, str):
+            for member in cls:
+                if member.value == value.lower():
+                    return member
+        return None
+
 
 class PlanStatus(str, Enum):
     ACTIVE = "active"
@@ -55,11 +63,27 @@ class PlanStatus(str, Enum):
     PAUSED = "paused"
     CANCELLED = "cancelled"
 
+    @classmethod
+    def _missing_(cls, value):
+        if isinstance(value, str):
+            for member in cls:
+                if member.value == value.lower():
+                    return member
+        return None
+
 
 class PriorityLevel(str, Enum):
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
+
+    @classmethod
+    def _missing_(cls, value):
+        if isinstance(value, str):
+            for member in cls:
+                if member.value == value.lower():
+                    return member
+        return None
 
 
 class InsightType(str, Enum):
@@ -68,6 +92,14 @@ class InsightType(str, Enum):
     ANALYSIS = "analysis"
     RECOMMENDATION = "recommendation"
     MOTIVATION = "motivation"
+
+    @classmethod
+    def _missing_(cls, value):
+        if isinstance(value, str):
+            for member in cls:
+                if member.value == value.lower():
+                    return member
+        return None
 
 
 # ==================== AUTHENTICATION MODELS ====================
@@ -139,12 +171,6 @@ class UserProfile(BaseModel):
     created_at: datetime
     
     model_config = {"from_attributes": True}
-
-    @validator("created_by_type", pre=True)
-    def normalize_created_by_type(cls, v):
-        if isinstance(v, str):
-            return v.lower()
-        return v
     
     @validator("user_type", pre=True)
     def normalize_user_type(cls, v):
