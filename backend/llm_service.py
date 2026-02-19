@@ -278,6 +278,15 @@ class LLMService:
                 "strategies": strategies,
                 "recommendations": ["Study regularly for consistent progress"]
             })
+        # For answer evaluation, return a valid structure
+        if "evaluate" in prompt.lower() or "student's answer" in prompt.lower():
+            return json.dumps({
+                "correct": False,
+                "score": 0.0,
+                "feedback": "AI evaluation is temporarily unavailable. Please review the correct answer manually.",
+                "suggestions": ["Study the topic more", "Practice similar questions"],
+                "key_points": []
+            })
         return json.dumps({"error": "LLM service temporarily unavailable", "message": "Please try again later"})
     
     # ==================== FLASHCARD GENERATION ====================

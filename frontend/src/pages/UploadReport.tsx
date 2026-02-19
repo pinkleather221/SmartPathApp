@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -41,11 +41,47 @@ const subjects = [
 
 const UploadReport = () => {
   const navigate = useNavigate();
+  const [existingReports, setExistingReports] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    // Fetch existing reports to prevent duplicates
+    const loadHistory = async () => {
+      try {
+        const history = await reportsApi.getHistory();
+        if (Array.isArray(history)) {
+          const keys = new Set<string>();
+          history.forEach((report: any) => {
+            if (report.term && report.year) {
+              keys.add(`${report.year}-${report.term}`);
+            }
+          });
+          setExistingReports(keys);
+        }
+      } catch (error) {
+        console.error("Failed to load report history:", error);
+      }
+    };
+    loadHistory();
+  }, []);
+
+  const availableYears = Array.from({ length: 9 }, (_, i) => (2026 - i).toString());
+
+  const getAvailableTerms = (selectedYear: string) => {
+    const allTerms = ["Term 1", "Term 2", "Term 3"];
+    if (!selectedYear) return allTerms;
+    return allTerms.filter(t => !existingReports.has(`${selectedYear}-${t}`));
+  };
+
+  const getAvailableYears = (selectedTerm: string) => {
+    if (!selectedTerm) return availableYears;
+    return availableYears.filter(y => !existingReports.has(`${y}-${selectedTerm}`));
+  };
+
   const [uploading, setUploading] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const [file, setFile] = useState<File | null>(null);
-  
+
   // OCR results state
   const [ocrResults, setOcrResults] = useState<Record<string, string> | null>(null);
   const [showOcrResults, setShowOcrResults] = useState(false);
@@ -89,32 +125,32 @@ const UploadReport = () => {
       await processOCR(selectedFile);
     }
   };
-  
+
   const processOCR = async (fileToProcess: File) => {
     setProcessing(true);
     setShowOcrResults(false);
     setOcrResults(null);
-    
+
     try {
       toast({
         title: "Processing file...",
         description: "Scanning document and extracting grades",
       });
-      
+
       const result = await reportsApi.previewOCR(fileToProcess);
-      
+
       if (result.success && Object.keys(result.grades).length > 0) {
         setOcrResults(result.grades);
         setShowOcrResults(true);
         setOcrMessage(result.message);
-        
+
         // Convert to subjectGrades format for editing
         const extractedGrades = Object.entries(result.grades).map(([subject, grade]) => ({
           subject,
           grade,
         }));
         setSubjectGrades(extractedGrades.length > 0 ? extractedGrades : [{ subject: "", grade: "" }]);
-        
+
         toast({
           title: "Grades extracted!",
           description: `Found ${Object.keys(result.grades).length} subjects. Please review below.`,
@@ -144,7 +180,7 @@ const UploadReport = () => {
     if (showOcrResults && subjectGrades.length > 0) {
       return handleConfirmOCR();
     }
-    
+
     if (!file || !term || !year) {
       toast({
         title: "Error",
@@ -172,12 +208,35 @@ const UploadReport = () => {
       setUploading(false);
     }
   };
-  
+
   const handleConfirmOCR = async () => {
-    if (!term || !year || subjectGrades.some((sg) => !sg.subject || !sg.grade)) {
+    if (!term || !year) {
       toast({
         title: "Error",
-        description: "Please fill in all fields and select term/year",
+        description: "Please select term and year",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Filter out completely empty rows
+    const nonEmptyRows = subjectGrades.filter(sg => sg.subject || sg.grade);
+
+    // Check for partially filled rows
+    if (nonEmptyRows.some(sg => !sg.subject || !sg.grade)) {
+      toast({
+        title: "Error",
+        description: "Please complete all subject rows or remove empty ones.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const validSubjects = nonEmptyRows.filter(sg => sg.subject && sg.grade);
+    if (validSubjects.length < 7) {
+      toast({
+        title: "Error",
+        description: "You must enter at least 7 subjects to save a report.",
         variant: "destructive",
       });
       return;
@@ -186,10 +245,8 @@ const UploadReport = () => {
     setUploading(true);
     try {
       const gradesJson: Record<string, string> = {};
-      subjectGrades.forEach((sg) => {
-        if (sg.subject && sg.grade) {
-          gradesJson[sg.subject] = sg.grade;
-        }
+      validSubjects.forEach((sg) => { // Use validSubjects here
+        gradesJson[sg.subject] = sg.grade;
       });
 
       await reportsApi.uploadJSON({
@@ -202,6 +259,7 @@ const UploadReport = () => {
       toast({
         title: "Report saved successfully!",
         description: "Your grades have been saved.",
+        variant: "default",
       });
       navigate("/reports");
     } catch (error) {
@@ -230,10 +288,33 @@ const UploadReport = () => {
   };
 
   const handleManualSubmit = async () => {
-    if (!term || !year || subjectGrades.some((sg) => !sg.subject || !sg.grade)) {
+    if (!term || !year) {
       toast({
         title: "Error",
-        description: "Please fill in all fields",
+        description: "Please select term and year",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Filter out completely empty rows
+    const nonEmptyRows = subjectGrades.filter(sg => sg.subject || sg.grade);
+
+    // Check for partially filled rows
+    if (nonEmptyRows.some(sg => !sg.subject || !sg.grade)) {
+      toast({
+        title: "Error",
+        description: "Please complete all subject rows or remove empty ones.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const validSubjects = nonEmptyRows.filter(sg => sg.subject && sg.grade);
+    if (validSubjects.length < 7) {
+      toast({
+        title: "Error",
+        description: "You must enter at least 7 subjects to save a report.",
         variant: "destructive",
       });
       return;
@@ -242,10 +323,8 @@ const UploadReport = () => {
     setUploading(true);
     try {
       const gradesJson: Record<string, string> = {};
-      subjectGrades.forEach((sg) => {
-        if (sg.subject && sg.grade) {
-          gradesJson[sg.subject] = sg.grade;
-        }
+      validSubjects.forEach((sg) => { // Use validSubjects here
+        gradesJson[sg.subject] = sg.grade;
       });
 
       await reportsApi.uploadJSON({
@@ -297,11 +376,10 @@ const UploadReport = () => {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div
-                  className={`border-2 border-dashed rounded-lg p-12 text-center transition-colors ${
-                    dragActive
-                      ? "border-primary bg-primary/5"
-                      : "border-border hover:border-primary/50"
-                  }`}
+                  className={`border-2 border-dashed rounded-lg p-12 text-center transition-colors ${dragActive
+                    ? "border-primary bg-primary/5"
+                    : "border-border hover:border-primary/50"
+                    }`}
                   onDragEnter={handleDrag}
                   onDragLeave={handleDrag}
                   onDragOver={handleDrag}
@@ -374,7 +452,7 @@ const UploadReport = () => {
                         <p className="text-sm text-muted-foreground">{ocrMessage}</p>
                       </div>
                     </div>
-                    
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="term-ocr">Term</Label>
@@ -383,9 +461,7 @@ const UploadReport = () => {
                             <SelectValue placeholder="Select term" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="Term 1">Term 1</SelectItem>
-                            <SelectItem value="Term 2">Term 2</SelectItem>
-                            <SelectItem value="Term 3">Term 3</SelectItem>
+                            {getAvailableTerms(year).map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
                           </SelectContent>
                         </Select>
                       </div>
@@ -397,14 +473,12 @@ const UploadReport = () => {
                             <SelectValue placeholder="Select year" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="2024">2024</SelectItem>
-                            <SelectItem value="2023">2023</SelectItem>
-                            <SelectItem value="2022">2022</SelectItem>
+                            {getAvailableYears(term).map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
                           </SelectContent>
                         </Select>
                       </div>
                     </div>
-                    
+
                     <div className="space-y-3">
                       <Label>Review & Edit Grades</Label>
                       {subjectGrades.map((sg, index) => (
@@ -466,7 +540,7 @@ const UploadReport = () => {
                         Add Subject
                       </Button>
                     </div>
-                    
+
                     <Button
                       onClick={handleConfirmOCR}
                       disabled={uploading || !term || !year}
@@ -505,9 +579,7 @@ const UploadReport = () => {
                         <SelectValue placeholder="Select term" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="Term 1">Term 1</SelectItem>
-                        <SelectItem value="Term 2">Term 2</SelectItem>
-                        <SelectItem value="Term 3">Term 3</SelectItem>
+                        {getAvailableTerms(year).map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
@@ -519,9 +591,7 @@ const UploadReport = () => {
                         <SelectValue placeholder="Select year" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="2024">2024</SelectItem>
-                        <SelectItem value="2023">2023</SelectItem>
-                        <SelectItem value="2022">2022</SelectItem>
+                        {getAvailableYears(term).map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
@@ -541,11 +611,13 @@ const UploadReport = () => {
                           <SelectValue placeholder="Select subject" />
                         </SelectTrigger>
                         <SelectContent>
-                          {subjects.map((subject) => (
-                            <SelectItem key={subject} value={subject}>
-                              {subject}
-                            </SelectItem>
-                          ))}
+                          {subjects
+                            .filter(s => s === sg.subject || !subjectGrades.some(other => other.subject === s))
+                            .map((subject) => (
+                              <SelectItem key={subject} value={subject}>
+                                {subject}
+                              </SelectItem>
+                            ))}
                         </SelectContent>
                       </Select>
 
@@ -608,8 +680,8 @@ const UploadReport = () => {
             </Card>
           </TabsContent>
         </Tabs>
-      </div>
-    </DashboardLayout>
+      </div >
+    </DashboardLayout >
   );
 };
 

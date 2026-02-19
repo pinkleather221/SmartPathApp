@@ -3,6 +3,7 @@ Core business logic services for SmartPath.
 Handles grade analysis, career matching, study planning, and more.
 """
 from datetime import datetime, timedelta
+import typing
 from typing import Dict, List, Optional, Tuple
 
 # Import Supabase database functions instead of SQLAlchemy
@@ -20,7 +21,7 @@ from models import (
     GradeTrend, PerformancePrediction, FlashcardResponse, CareerRecommendationResponse,
     StudyPlanResponse, StudySessionResponse, LearningInsightResponse, AcademicFeedback,
     InviteCodeResponse, LinkedStudentResponse, LinkedGuardianResponse, StudentDashboardResponse,
-    ReportResponse
+    ReportResponse, UserType
 )
 import secrets
 import string
@@ -52,7 +53,7 @@ class ReportService:
         grades_json: Dict[str, str],
         file_path: Optional[str] = None,
         file_type: Optional[str] = None
-    ) -> Optional[Dict[str, any]]:
+    ) -> Optional[Dict[str, typing.Any]]:
         """Create a new academic report."""
         report_data = {
             'user_id': user_id,
@@ -205,6 +206,7 @@ class PerformanceService:
             return PerformanceDashboard(
                 overall_gpa=0.0,
                 total_subjects=0,
+                subject_performance=[],
                 strong_subjects=[],
                 weak_subjects=[],
                 improving_subjects=[],
@@ -217,6 +219,10 @@ class PerformanceService:
 
         # Get subject performances
         subject_perfs = get_subject_performance(user_id)
+        
+        # Calculate GPA for each subject to ensure 0-4 scale availability
+        for sp in subject_perfs:
+            sp['gpa'] = grade_to_gpa(sp.get('current_grade', 'E'))
 
         strong_subjects = [sp for sp in subject_perfs if sp['strength_score'] >= 70]
         weak_subjects = [sp for sp in subject_perfs if sp['strength_score'] < 60]
@@ -229,10 +235,23 @@ class PerformanceService:
         # Convert to response format
         from models import ReportResponse, SubjectPerformanceResponse
         recent_reports_response = []
+        def _parse_dt(value: typing.Any) -> datetime:
+            if isinstance(value, datetime):
+                return value
+            if isinstance(value, str):
+                v = value.strip()
+                if v.endswith("Z"):
+                    v = v[:-1] + "+00:00"
+                try:
+                    return datetime.fromisoformat(v)
+                except Exception:
+                    return datetime.utcnow()
+            return datetime.utcnow()
+
         for report in recent_reports:
             # Convert datetime string back to datetime for validation
             report_copy = report.copy()
-            report_copy['report_date'] = datetime.fromisoformat(report['report_date'])
+            report_copy['report_date'] = _parse_dt(report_copy.get('report_date'))
             recent_reports_response.append(ReportResponse.model_validate(report_copy))
 
         return PerformanceDashboard(
@@ -253,12 +272,25 @@ class PerformanceService:
         
         if not reports:
             return []
+
+        def _parse_dt(value: typing.Any) -> datetime:
+            if isinstance(value, datetime):
+                return value
+            if isinstance(value, str):
+                v = value.strip()
+                if v.endswith("Z"):
+                    v = v[:-1] + "+00:00"
+                try:
+                    return datetime.fromisoformat(v)
+                except Exception:
+                    return datetime.utcnow()
+            return datetime.utcnow()
         
         # Group by subject
         subject_data: Dict[str, List[Tuple[datetime, float]]] = {}
         for report in reports:
             # Convert report_date string to datetime object for proper sorting and comparison
-            report_date = datetime.fromisoformat(report['report_date'])
+            report_date = _parse_dt(report.get('report_date'))
             for subj, grade in report['grades_json'].items():
                 if subject and subj != subject:
                     continue
@@ -337,7 +369,7 @@ class FlashcardService:
         count: int,
         grade_level: int,
         curriculum: str
-    ) -> List[Dict[str, Any]]:
+    ) -> List[Dict[str, typing.Any]]:
         """Generate flashcards using LLM."""
         flashcards_data = await llm_service.generate_flashcards(
             subject=subject,
@@ -373,7 +405,7 @@ class FlashcardService:
         user_id: int,
         correct: bool,
         user_answer: Optional[str] = None
-    ) -> FlashcardReview:
+    ) -> Dict[str, typing.Any]:
         """Record a flashcard review."""
         existing_flashcard = supabase.table('flashcards').select('*').eq('card_id', card_id).eq('user_id', user_id).execute()
         flashcard = existing_flashcard.data[0] if existing_flashcard.data else None
@@ -437,7 +469,7 @@ class FlashcardService:
         card_id: int,
         user_id: int,
         user_answer: str
-    ) -> Dict:
+    ) -> Dict[str, typing.Any]:
         """Evaluate student's answer using LLM."""
         flashcard_response = supabase.table('flashcards').select('*').eq('card_id', card_id).eq('user_id', user_id).execute()
         flashcard = flashcard_response.data[0] if flashcard_response.data else None
@@ -469,7 +501,7 @@ class CareerService:
     async def generate_recommendations(
         user_id: int,
         interests: Optional[List[str]] = None
-    ) -> List[Dict[str, Any]]:
+    ) -> List[Dict[str, typing.Any]]:
         """Generate career recommendations using LLM."""
         # Get user's latest grades
         latest_report_response = supabase.table('academic_reports').select('*').eq('user_id', user_id).order('report_date', desc=True).limit(1).execute()
@@ -527,7 +559,7 @@ class StudyPlanService:
         focus_areas: Optional[Dict[str, List[str]]] = None,
         priority: Optional[int] = 5, # Added priority parameter
         active_days: Optional[List[str]] = None # Added active_days parameter
-    ) -> List[Dict[str, Any]]:
+    ) -> List[Dict[str, typing.Any]]:
         """Generate study plans using LLM."""
         # Get weak subjects
         weak_subjects_response = supabase.table('subject_performance').select('subject').eq('user_id', user_id).in_('subject', subjects).lt('strength_score', 60).execute()
@@ -713,7 +745,7 @@ class StudyPlanService:
         return plans
 
     @staticmethod
-    def get_plan_by_id(plan_id: int) -> Dict[str, Any]:
+    def get_plan_by_id(plan_id: int) -> Dict[str, typing.Any]:
         """Get study plan by ID with sessions and weekly schedule."""
         plan_response = supabase.table('study_plans').select('*').eq('plan_id', plan_id).execute()
         plan = plan_response.data[0] if plan_response.data else None
@@ -868,7 +900,7 @@ class InviteService:
         return ''.join(secrets.choice(alphabet) for _ in range(8))
     
     @staticmethod
-    def create_invite_code(creator_id: int, creator_type: UserType) -> Dict[str, Any]:
+    def create_invite_code(creator_id: int, creator_type: UserType) -> Dict[str, typing.Any]:
         """Create a new invite code for a teacher or parent."""
         # Validate creator type
         if creator_type not in [UserType.TEACHER, UserType.PARENT]:
@@ -892,13 +924,13 @@ class InviteService:
         return response.data[0]
     
     @staticmethod
-    def get_my_codes(user_id: int) -> List[Dict[str, Any]]:
+    def get_my_codes(user_id: int) -> List[Dict[str, typing.Any]]:
         """Get all invite codes created by a user."""
         response = supabase.table('invite_codes').select('*').eq('creator_id', user_id).order('created_at', desc=True).execute()
         return response.data
     
     @staticmethod
-    def redeem_code(code: str, student_id: int) -> Dict[str, Any]:
+    def redeem_code(code: str, student_id: int) -> Dict[str, typing.Any]:
         """Redeem an invite code and create a relationship."""
         # Find the invite code
         invite_response = supabase.table('invite_codes').select('*').eq('code', code.upper()).execute()
@@ -948,7 +980,7 @@ class RelationshipService:
     """Service for managing user relationships."""
     
     @staticmethod
-    def get_linked_students(guardian_id: int) -> List[Dict[str, Any]]:
+    def get_linked_students(guardian_id: int) -> List[Dict[str, typing.Any]]:
         """Get all students linked to a teacher/parent."""
         relationships_response = supabase.table('user_relationships').select('*').eq('guardian_id', guardian_id).execute()
         relationships = relationships_response.data
@@ -972,7 +1004,7 @@ class RelationshipService:
         return students_data
     
     @staticmethod
-    def get_linked_guardians(student_id: int) -> List[Dict[str, Any]]:
+    def get_linked_guardians(student_id: int) -> List[Dict[str, typing.Any]]:
         """Get all teachers/parents linked to a student."""
         relationships_response = supabase.table('user_relationships').select('*').eq('student_id', student_id).execute()
         relationships = relationships_response.data

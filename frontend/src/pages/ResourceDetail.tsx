@@ -1,7 +1,9 @@
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { resourcesApi, Resource } from "@/lib/api";
+import { getCurrentUser } from "@/lib/auth";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,6 +15,13 @@ const ResourceDetail = () => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [resource, setResource] = useState<Resource | null>(null);
+
+  // Fetch current user data
+  const { data: user } = useQuery({
+    queryKey: ["currentUser"],
+    queryFn: getCurrentUser,
+    retry: 1,
+  });
 
   const load = async () => {
     if (!id) return;
@@ -67,7 +76,7 @@ const ResourceDetail = () => {
             <CardContent className="space-y-4">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Badge variant="outline">{resource.subject}</Badge>
-                {resource.grade_level && <Badge variant="outline">Grade {resource.grade_level}</Badge>}
+                {resource.grade_level && <Badge variant="outline">{user?.curriculum_type?.toUpperCase() === "8-4-4" ? `Form ${resource.grade_level}` : `Grade ${resource.grade_level}`}</Badge>}
                 <Badge variant="secondary">{resource.type?.toUpperCase?.() || resource.type}</Badge>
                 {Array.isArray(resource.tags) && resource.tags.map((t: string) => (
                   <Badge key={t} variant="outline">{t}</Badge>

@@ -77,4 +77,6 @@ postman_collection.json
 # Uploads (these should be in S3 or similar in production)
 uploads/*
 !uploads/.gitkeep
+Chapter_3_and_4_Methodology_and_Data_Analysis.md
+System_Flow_and_Features.md
 

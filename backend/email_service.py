@@ -1,27 +1,57 @@
-from typing import List, Dict, Any
-from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType
+from typing import List, Optional
+
+try:
+    from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType
+except Exception:
+    FastMail = None
+    MessageSchema = None
+    ConnectionConfig = None
+    MessageType = None
 from config import settings
-from pydantic import EmailStr
+from pydantic import EmailStr, TypeAdapter
 import logging
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-conf = ConnectionConfig(
-    MAIL_USERNAME=settings.MAIL_USERNAME,
-    MAIL_PASSWORD=settings.MAIL_PASSWORD,
-    MAIL_FROM=settings.MAIL_FROM,
-    MAIL_PORT=settings.MAIL_PORT,
-    MAIL_SERVER=settings.MAIL_SERVER,
-    MAIL_STARTTLS=settings.MAIL_STARTTLS,
-    MAIL_SSL_TLS=settings.MAIL_SSL_TLS,
-    USE_CREDENTIALS=settings.USE_CREDENTIALS,
-    VALIDATE_CERTS=settings.VALIDATE_CERTS
-)
+_email_adapter = TypeAdapter(EmailStr)
+
+def _build_mail_config() -> Optional[object]:
+    if not settings.MAIL_ENABLED:
+        return None
+    mail_from = (settings.MAIL_FROM or "").strip()
+    if not mail_from:
+        logger.warning("MAIL_ENABLED is true but MAIL_FROM is empty; disabling email.")
+        return None
+    try:
+        _email_adapter.validate_python(mail_from)
+    except Exception:
+        logger.warning("MAIL_ENABLED is true but MAIL_FROM is invalid; disabling email.")
+        return None
+    if not (settings.MAIL_USERNAME and settings.MAIL_PASSWORD and settings.MAIL_SERVER):
+        logger.warning("MAIL_ENABLED is true but required mail settings are missing; disabling email.")
+        return None
+    if ConnectionConfig is None:
+        logger.warning("MAIL_ENABLED is true but fastapi_mail is not installed; disabling email.")
+        return None
+
+    return ConnectionConfig(
+        MAIL_USERNAME=settings.MAIL_USERNAME,
+        MAIL_PASSWORD=settings.MAIL_PASSWORD,
+        MAIL_FROM=mail_from,
+        MAIL_PORT=settings.MAIL_PORT,
+        MAIL_SERVER=settings.MAIL_SERVER,
+        MAIL_STARTTLS=settings.MAIL_STARTTLS,
+        MAIL_SSL_TLS=settings.MAIL_SSL_TLS,
+        USE_CREDENTIALS=settings.USE_CREDENTIALS,
+        VALIDATE_CERTS=settings.VALIDATE_CERTS
+    )
 
 class EmailService:
     def __init__(self):
-        self.fastmail = FastMail(conf)
+        conf = _build_mail_config()
+        self.enabled = conf is not None
+        self.fastmail = FastMail(conf) if (conf and FastMail is not None) else None
 
     async def send_email(
         self, 
@@ -30,6 +60,13 @@ class EmailService:
         body: str
     ):
         """Send a generic email."""
+        if (
+            not self.enabled
+            or not self.fastmail
+            or MessageSchema is None
+            or MessageType is None
+        ):
+            return False
         message = MessageSchema(
             subject=subject,
             recipients=email,
@@ -59,7 +96,7 @@ class EmailService:
         <p>Happy Learning!</p>
         <p>The SmartPath Team</p>
         """
-        await self.send_email([email], subject, body)
+        return await self.send_email([email], subject, body)
 
     async def send_reset_password_email(self, email: str, token: str):
         """Send password reset email."""
@@ -75,6 +112,6 @@ class EmailService:
         <p>This link expires in 1 hour.</p>
         <p>If you didn't request this, please ignore this email.</p>
         """
-        await self.send_email([email], subject, body)
+        return await self.send_email([email], subject, body)
 
 email_service = EmailService()

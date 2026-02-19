@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, BookOpen, Star, StarOff, SearchX } from "lucide-react"; // Added SearchX icon
-import { resourcesApi, Resource } from "@/lib/api";
+import { Loader2, BookOpen, Star, StarOff, SearchX } from "lucide-react";
+import { resourcesApi, Resource, PaginatedResourcesResponse } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "react-router-dom";
+import { getCurrentUser } from "@/lib/auth";
 
 // Import the Empty State components
 import {
@@ -32,30 +34,124 @@ const ResourceLibrary = () => {
   const [total, setTotal] = useState(0);
   const pageSize = 20;
 
+  // Fetch current user data
+  const { data: user } = useQuery({
+    queryKey: ["currentUser"],
+    queryFn: getCurrentUser,
+    retry: 1,
+  });
+
+  // Dynamic grade options based on user's curriculum
+  const getGradeOptions = () => {
+    if (user?.curriculum_type?.toUpperCase() === "8-4-4") {
+      return [
+        { value: "3", label: "Form 3" },
+        { value: "4", label: "Form 4" }
+      ];
+    } else {
+      // CBE grades (default)
+      return [
+        { value: "7", label: "Grade 7" },
+        { value: "8", label: "Grade 8" },
+        { value: "9", label: "Grade 9" },
+        { value: "10", label: "Grade 10" },
+        { value: "11", label: "Grade 11" },
+        { value: "12", label: "Grade 12" }
+      ];
+    }
+  };
+
+  const gradeOptions = getGradeOptions();
+
+  // Dynamic subject options based on user's curriculum
+  const getSubjectOptions = () => {
+    if (user?.curriculum_type?.toUpperCase() === "8-4-4") {
+      // 8-4-4 KCSE Subjects for Form 3-4
+      return [
+        // Compulsory
+        { value: "Mathematics", label: "Mathematics" },
+        { value: "English", label: "English" },
+        { value: "Kiswahili", label: "Kiswahili" },
+        // Sciences
+        { value: "Physics", label: "Physics" },
+        { value: "Chemistry", label: "Chemistry" },
+        { value: "Biology", label: "Biology" },
+        // Humanities
+        { value: "History", label: "History & Government" },
+        { value: "Geography", label: "Geography" },
+        { value: "CRE", label: "CRE" },
+        { value: "IRE", label: "IRE" },
+        { value: "HRE", label: "HRE" },
+        // Technical/Applied
+        { value: "Business Studies", label: "Business Studies" },
+        { value: "Agriculture", label: "Agriculture" },
+        { value: "Computer Studies", label: "Computer Studies" },
+        { value: "Home Science", label: "Home Science" },
+        // Languages
+        { value: "French", label: "French" },
+        { value: "German", label: "German" },
+        { value: "Arabic", label: "Arabic" },
+        // Creative
+        { value: "Music", label: "Music" },
+        { value: "Art & Design", label: "Art & Design" },
+      ];
+    } else {
+      // CBE Subjects for Junior (7-9) and Senior (10-12) Secondary
+      return [
+        // Core
+        { value: "Mathematics", label: "Mathematics" },
+        { value: "English", label: "English" },
+        { value: "Kiswahili", label: "Kiswahili" },
+        { value: "Integrated Science", label: "Integrated Science" },
+        { value: "Social Studies", label: "Social Studies" },
+        // Sciences
+        { value: "Physics", label: "Physics" },
+        { value: "Chemistry", label: "Chemistry" },
+        { value: "Biology", label: "Biology" },
+        // Humanities
+        { value: "History", label: "History" },
+        { value: "Geography", label: "Geography" },
+        { value: "CRE", label: "CRE" },
+        { value: "IRE", label: "IRE" },
+        // Applied/Technical
+        { value: "Business Studies", label: "Business Studies" },
+        { value: "Agriculture", label: "Agriculture" },
+        { value: "Computer Science", label: "Computer Science" },
+        { value: "Home Science", label: "Home Science" },
+        // Languages
+        { value: "French", label: "French" },
+        { value: "German", label: "German" },
+        { value: "Arabic", label: "Arabic" },
+        { value: "Mandarin", label: "Mandarin" },
+        // Creative/Practical
+        { value: "Music", label: "Music" },
+        { value: "Art & Design", label: "Art & Design" },
+        { value: "Physical Education", label: "Physical Education" },
+      ];
+    }
+  };
+
+  const subjectOptions = getSubjectOptions();
+
   const fetchResources = async () => {
     setLoading(true);
     try {
-      const res = await resourcesApi.list({ 
-        q, 
-        subject, 
-        grade: grade, // Corrected from grade_level to grade to match API
-        type, 
-        limit: pageSize, // Corrected from page_size to limit
-        offset: (page - 1) * pageSize // Calculated offset
+      const res = await resourcesApi.list({
+        q,
+        subject,
+        grade: grade,
+        type,
+        page: page,
+        pageSize: pageSize
       });
-      // The API now returns Resource[] directly, not { items, total }
-      // We need to adjust backend to return total count for pagination, 
-      // OR for now, just accept the array.
-      // Since resourcesApi.list returns Promise<Resource[]>:
-      if (Array.isArray(res)) {
-          setItems(res);
-          // Temporary fix: we don't have total count from backend yet with this return type
-          // We'll set total to length * page (approximation) or just length
-          setTotal(res.length); 
+      // The API returns a PaginatedResourcesResponse with items, total, page, page_size, total_pages
+      if (res && res.items) {
+        setItems(res.items);
+        setTotal(res.total);
       } else {
-          // Fallback if backend structure differs
-           setItems([]);
-           setTotal(0);
+        // Fallback if backend structure differs
+        setItems([]);
+        setTotal(0);
       }
     } catch (e) {
       toast({ title: "Failed to load resources", variant: "destructive" });
@@ -104,7 +200,7 @@ const ResourceLibrary = () => {
           </div>
           <div>
             <h1 className="text-3xl font-bold">Digital Resource Library</h1>
-            <p className="text-muted-foreground">Curated KCSE/CBC content: notes, PDFs, videos, toolkits</p>
+            <p className="text-muted-foreground">Curated educational content: notes, PDFs, videos, toolkits</p>
           </div>
         </div>
 
@@ -121,12 +217,11 @@ const ResourceLibrary = () => {
             <SelectTrigger><SelectValue placeholder="Subject" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Subjects</SelectItem>
-              <SelectItem value="Mathematics">Mathematics</SelectItem>
-              <SelectItem value="English">English</SelectItem>
-              <SelectItem value="Kiswahili">Kiswahili</SelectItem>
-              <SelectItem value="Physics">Physics</SelectItem>
-              <SelectItem value="Chemistry">Chemistry</SelectItem>
-              <SelectItem value="Biology">Biology</SelectItem>
+              {subjectOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
 
@@ -142,13 +237,14 @@ const ResourceLibrary = () => {
           </Select>
 
           <Select value={grade ? String(grade) : "all"} onValueChange={(v) => { setGrade(v === "all" ? undefined : Number(v)); setPage(1); }}>
-            <SelectTrigger><SelectValue placeholder="Grade" /></SelectTrigger>
+            <SelectTrigger><SelectValue placeholder={user?.curriculum_type?.toUpperCase() === "8-4-4" ? "Form" : "Grade"} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Grades</SelectItem>
-              <SelectItem value="9">Grade 9</SelectItem>
-              <SelectItem value="10">Grade 10</SelectItem>
-              <SelectItem value="11">Grade 11</SelectItem>
-              <SelectItem value="12">Grade 12</SelectItem>
+              <SelectItem value="all">{user?.curriculum_type?.toUpperCase() === "8-4-4" ? "All Forms" : "All Grades"}</SelectItem>
+              {gradeOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -171,7 +267,7 @@ const ResourceLibrary = () => {
                 <CardContent className="space-y-3">
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Badge variant="outline">{r.subject}</Badge>
-                    {r.grade_level && <Badge variant="outline">Grade {r.grade_level}</Badge>}
+                    {r.grade_level && <Badge variant="outline">{user?.curriculum_type?.toUpperCase() === "8-4-4" ? `Form ${r.grade_level}` : `Grade ${r.grade_level}`}</Badge>}
                     <Badge variant="secondary">{r.type?.toUpperCase?.() || r.type}</Badge>
                   </div>
                   <div className="flex items-center gap-2">

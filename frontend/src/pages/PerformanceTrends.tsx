@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { LineChart, ArrowLeft } from "lucide-react";
 import { LineChart as RechartsLineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { performanceApi } from "@/lib/api";
+import { gradeNumericToGPA } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 
 interface TrendData {
@@ -59,7 +60,7 @@ const PerformanceTrends = () => {
         const dateStr = new Date(d).toISOString().split("T")[0];
         const grade = (t.grades || [])[idx];
         if (typeof grade === "number") {
-          subjectDateGrade[subject][dateStr] = grade;
+          subjectDateGrade[subject][dateStr] = gradeNumericToGPA(grade);
         }
       });
     });
@@ -156,7 +157,7 @@ const PerformanceTrends = () => {
               Grade Trends
             </CardTitle>
             <CardDescription>
-              {selectedSubject === "All Subjects" 
+              {selectedSubject === "All Subjects"
                 ? "Showing GPA trends for all subjects"
                 : `Showing GPA trend for ${selectedSubject}`}
             </CardDescription>
@@ -167,8 +168,8 @@ const PerformanceTrends = () => {
                 <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                 <XAxis dataKey="term" className="text-xs" />
                 <YAxis domain={[0, 4]} className="text-xs" />
-                <Tooltip 
-                  contentStyle={{ 
+                <Tooltip
+                  contentStyle={{
                     backgroundColor: 'hsl(var(--card))',
                     border: '1px solid hsl(var(--border))',
                     borderRadius: '8px'
@@ -193,10 +194,10 @@ const PerformanceTrends = () => {
                     })}
                   </>
                 ) : (
-                  <Line 
-                    type="monotone" 
-                    dataKey={selectedSubject} 
-                    stroke="hsl(var(--primary))" 
+                  <Line
+                    type="monotone"
+                    dataKey={selectedSubject}
+                    stroke="hsl(var(--primary))"
                     strokeWidth={3}
                     dot={{ fill: 'hsl(var(--primary))', r: 5 }}
                     name={selectedSubject}

@@ -17,6 +17,14 @@ class UserType(str, Enum):
     PARENT = "parent"
     ADMIN = "admin"
 
+    @classmethod
+    def _missing_(cls, value):
+        if isinstance(value, str):
+            for member in cls:
+                if member.value == value.lower():
+                    return member
+        return None
+
 
 class CurriculumType(str, Enum):
     CBE = "CBE"
@@ -24,11 +32,29 @@ class CurriculumType(str, Enum):
     KCSE = "kcse"
     IGCSE = "igcse"
 
+    @classmethod
+    def _missing_(cls, value):
+        if isinstance(value, str):
+            v = value.strip().upper()
+            if v == "CBE": return cls.CBE
+            if v in {"8-4-4", "8 4 4", "844"}: return cls.EIGHT_FOUR_FOUR
+            if v == "KCSE": return cls.KCSE
+            if v == "IGCSE": return cls.IGCSE
+        return None
+
 
 class DifficultyLevel(str, Enum):
     EASY = "easy"
     MEDIUM = "medium"
     HARD = "hard"
+
+    @classmethod
+    def _missing_(cls, value):
+        if isinstance(value, str):
+            for member in cls:
+                if member.value == value.lower():
+                    return member
+        return None
 
 
 class PlanStatus(str, Enum):
@@ -37,11 +63,27 @@ class PlanStatus(str, Enum):
     PAUSED = "paused"
     CANCELLED = "cancelled"
 
+    @classmethod
+    def _missing_(cls, value):
+        if isinstance(value, str):
+            for member in cls:
+                if member.value == value.lower():
+                    return member
+        return None
+
 
 class PriorityLevel(str, Enum):
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
+
+    @classmethod
+    def _missing_(cls, value):
+        if isinstance(value, str):
+            for member in cls:
+                if member.value == value.lower():
+                    return member
+        return None
 
 
 class InsightType(str, Enum):
@@ -50,6 +92,14 @@ class InsightType(str, Enum):
     ANALYSIS = "analysis"
     RECOMMENDATION = "recommendation"
     MOTIVATION = "motivation"
+
+    @classmethod
+    def _missing_(cls, value):
+        if isinstance(value, str):
+            for member in cls:
+                if member.value == value.lower():
+                    return member
+        return None
 
 
 # ==================== AUTHENTICATION MODELS ====================
@@ -71,6 +121,12 @@ class UserRegister(BaseModel):
         user_type = values.get('user_type')
         if user_type == UserType.STUDENT and v is None:
             raise ValueError("grade_level is required for students")
+        return v
+
+    @validator("user_type", pre=True)
+    def normalize_user_type(cls, v):
+        if isinstance(v, str):
+            return v.lower()
         return v
 
     @validator("curriculum_type", pre=True)
@@ -116,6 +172,12 @@ class UserProfile(BaseModel):
     
     model_config = {"from_attributes": True}
     
+    @validator("user_type", pre=True)
+    def normalize_user_type(cls, v):
+        if isinstance(v, str):
+            return v.lower()
+        return v
+
     @validator("curriculum_type", pre=True)
     def normalize_curriculum_type(cls, v):
         if v is None:
@@ -160,7 +222,7 @@ class UserProfileUpdate(BaseModel):
 class ReportUpload(BaseModel):
     """Report upload request model."""
     term: str = Field(..., description="Term name (e.g., 'Term 1', 'Term 2')")
-    year: int = Field(..., ge=2020, le=2030)
+    year: int = Field(..., ge=2018, le=2030)
     report_date: datetime
     grades_json: Optional[Dict[str, str]] = Field(None, description="Subject grades as JSON object")
 
@@ -199,6 +261,7 @@ class SubjectPerformanceResponse(BaseModel):
     subject: str
     current_grade: Optional[str]
     grade_numeric: Optional[float]
+    gpa: Optional[float] = None
     trend: Optional[str]
     strength_score: float
     weakness_areas: Optional[List[str]]
@@ -679,6 +742,12 @@ class InviteCodeResponse(BaseModel):
     
     model_config = {"from_attributes": True}
 
+    @validator("creator_type", pre=True)
+    def normalize_creator_type(cls, v):
+        if isinstance(v, str):
+            return v.lower()
+        return v
+
 
 class InviteCodeRedeem(BaseModel):
     """Request to redeem an invite code."""
@@ -718,6 +787,12 @@ class LinkedGuardianResponse(BaseModel):
     relationship_type: str
     linked_at: datetime
 
+    @validator("user_type", pre=True)
+    def normalize_user_type(cls, v):
+        if isinstance(v, str):
+            return v.lower()
+        return v
+
 
 class StudentDashboardResponse(BaseModel):
     """Dashboard data for a student (viewed by teacher/parent)."""
@@ -754,6 +829,12 @@ class GuardianInsightResponse(BaseModel):
     is_read: bool
     
     model_config = {"from_attributes": True}
+
+    @validator("created_by_type", pre=True)
+    def normalize_created_by_type(cls, v):
+        if isinstance(v, str):
+            return v.lower()
+        return v
 
 
 # ==================== CHAT MODELS ====================

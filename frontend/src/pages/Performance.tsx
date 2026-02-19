@@ -10,6 +10,7 @@ import { performanceApi } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts";
+import { gradeNumericToGPA } from "@/lib/utils";
 
 const Performance = () => {
   const { toast } = useToast();
@@ -51,7 +52,16 @@ const Performance = () => {
 
   const overallGPA = dashboard?.overall_gpa || 0;
   const totalSubjects = dashboard?.total_subjects || 0;
-  const subjects = dashboard?.subject_performance || [];
+
+  // Convert Kenyan grade scale (0-12) to GPA scale (0-4)
+
+
+  const rawSubjects = dashboard?.subject_performance || [];
+  // Add GPA field to each subject for correct chart display
+  const subjects = rawSubjects.map((subject: any) => ({
+    ...subject,
+    gpa: typeof subject.gpa === 'number' ? subject.gpa : gradeNumericToGPA(subject.grade_numeric || 0)
+  }));
   console.log("Subject data:", subjects);
   const trend = dashboard?.trend || "improving";
 
@@ -198,18 +208,18 @@ const Performance = () => {
                   <CardContent className="space-y-4">
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-muted-foreground">Grade</span>
-                      <Badge className={getGradeColor(subject.grade_numeric || 0)}>
+                      <Badge className={getGradeColor(subject.gpa || 0)}>
                         {subject.current_grade || "N/A"}
                       </Badge>
                     </div>
 
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground">Strength</span>
-                          <span className="font-medium">{Math.round(subject.strength_score || 0)}%</span>
-                        </div>
-                        <Progress value={subject.strength_score || 0} className={getStrengthColor(subject.strength_score || 0)} />
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Strength</span>
+                        <span className="font-medium">{Math.round(subject.strength_score || 0)}%</span>
                       </div>
+                      <Progress value={subject.strength_score || 0} className={getStrengthColor(subject.strength_score || 0)} />
+                    </div>
                   </CardContent>
                 </Card>
               ))}
@@ -268,7 +278,7 @@ const Performance = () => {
                         formatter={(value: any) => [value ? value.toFixed(2) : "0.00", "GPA"]}
                       />
                       <Bar
-                        dataKey="grade_numeric"
+                        dataKey="gpa"
                         fill="var(--color-gpa)"
                         radius={[4, 4, 0, 0]}
                       />
@@ -349,12 +359,12 @@ const Performance = () => {
                         <tr key={subject.performance_id || subject.subject} className="border-b hover:bg-muted/50">
                           <td className="py-3 px-4 font-medium">{subject.subject}</td>
                           <td className="py-3 px-4 text-center">
-                            <Badge className={getGradeColor(subject.grade_numeric || 0)}>
+                            <Badge className={getGradeColor(subject.gpa || 0)}>
                               {subject.current_grade || "N/A"}
                             </Badge>
                           </td>
                           <td className="py-3 px-4 text-center font-mono">
-                            {(subject.grade_numeric || 0).toFixed(2)}
+                            {(subject.gpa || 0).toFixed(2)}
                           </td>
                           <td className="py-3 px-4 text-center">
                             <div className="flex items-center gap-2 justify-center">

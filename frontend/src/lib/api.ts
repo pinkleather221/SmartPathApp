@@ -98,27 +98,27 @@ class ApiClient {
       throw new Error(text || "Unknown error");
     }
 
-interface ValidationError {
-  loc?: (string | number)[];
-  msg?: string;
-  type?: string;
-}
+    interface ValidationError {
+      loc?: (string | number)[];
+      msg?: string;
+      type?: string;
+    }
 
-interface ValidationResponse {
-  detail: ValidationError[];
-}
+    interface ValidationResponse {
+      detail: ValidationError[];
+    }
 
     if (!response.ok) {
       // Handle validation errors (422) which have detailed error structure
       let errorMessage = (data as ApiResponse<T>).message || `Request failed with status ${response.status}`;
-      
+
       if (response.status === 422) {
-         const errorData = data as unknown as ValidationResponse;
-         if (errorData.detail && Array.isArray(errorData.detail)) {
-            errorMessage = errorData.detail.map((err) =>
-              `${err.loc?.join('.') || 'unknown'}: ${err.msg || 'Unknown error'}`
-            ).join(', ');
-         }
+        const errorData = data as unknown as ValidationResponse;
+        if (errorData.detail && Array.isArray(errorData.detail)) {
+          errorMessage = errorData.detail.map((err) =>
+            `${err.loc?.join('.') || 'unknown'}: ${err.msg || 'Unknown error'}`
+          ).join(', ');
+        }
       } else {
         errorMessage = (data as ApiResponse<T>).detail || errorMessage;
       }
@@ -298,11 +298,11 @@ export const authApi = {
     // If apiClient forces JSON, we might need a raw fetch here.
     // Let's assume standard fetch behavior where body=FormData sets multipart/form-data.
     // However, our backend expects Form(...) which is x-www-form-urlencoded or multipart.
-    
+
     // Using direct fetch to ensure correct headers for FormData
     return fetch(`${API_BASE_URL}/auth/forgot-password`, {
-        method: 'POST',
-        body: formData
+      method: 'POST',
+      body: formData
     }).then(res => apiClient.handleResponse<{ message: string }>(res));
   },
 
@@ -310,10 +310,10 @@ export const authApi = {
     const formData = new FormData();
     formData.append("token", token);
     formData.append("new_password", newPassword);
-    
+
     return fetch(`${API_BASE_URL}/auth/reset-password`, {
-        method: 'POST',
-        body: formData
+      method: 'POST',
+      body: formData
     }).then(res => apiClient.handleResponse<{ message: string }>(res));
   },
 
@@ -366,32 +366,41 @@ export const authApi = {
   },
 };
 
+// Paginated resources response type
+export interface PaginatedResourcesResponse {
+  items: Resource[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
 export const resourcesApi = {
   create: (data: Omit<Resource, "id" | "created_at" | "updated_at" | "views" | "downloads" | "likes">) =>
     apiClient.post<Resource>("/resources", data),
-    
-  list: (params?: { subject?: string; grade?: number; type?: string; limit?: number; offset?: number; q?: string }) => {
+
+  list: (params?: { subject?: string; grade?: number; type?: string; page?: number; pageSize?: number; q?: string }) => {
     // Convert params to query string manually or use URLSearchParams
     const query = new URLSearchParams();
     if (params?.subject) query.append("subject", params.subject);
     if (params?.grade) query.append("grade_level", String(params.grade));
     if (params?.type) query.append("type", params.type);
-    if (params?.limit) query.append("limit", String(params.limit));
-    if (params?.offset) query.append("offset", String(params.offset));
+    if (params?.page) query.append("page", String(params.page));
+    if (params?.pageSize) query.append("page_size", String(params.pageSize));
     if (params?.q) query.append("q", params.q);
-    
-    return apiClient.get<Resource[]>(`/resources?${query.toString()}`);
+
+    return apiClient.get<PaginatedResourcesResponse>(`/resources?${query.toString()}`);
   },
 
   get: (id: number) => apiClient.get<Resource>(`/resources/${id}`),
-  
+
   favorite: (id: number) => apiClient.post(`/resources/${id}/favorite`, {}),
   unfavorite: (id: number) => apiClient.delete(`/resources/${id}/favorite`),
 
   upload: async (file: File) => {
     return apiClient.uploadFile<{ url: string; success: boolean }>(
-        "/resources/upload", 
-        file
+      "/resources/upload",
+      file
     );
   }
 };
@@ -681,7 +690,7 @@ export const mathApi = {
     }
 
     const url = `${API_BASE_URL}/math/solve`;
-    
+
     // Use a longer timeout for LLM
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minutes
@@ -692,15 +701,15 @@ export const mathApi = {
       body: formData,
       signal: controller.signal,
     })
-    .then(async (response) => {
+      .then(async (response) => {
         clearTimeout(timeoutId);
         return apiClient.handleResponse<{ solution: string; success: boolean }>(response);
-    })
-    .catch((error) => {
+      })
+      .catch((error) => {
         clearTimeout(timeoutId);
         if (error.name === 'AbortError') throw new Error("Request timed out");
         throw error;
-    });
+      });
   },
 
   generatePractice: (subject: string, topic: string, gradeLevel: number) => {
@@ -715,18 +724,18 @@ export const mathApi = {
       headers["Authorization"] = `Bearer ${token}`;
     }
 
-interface MathProblem {
-  problem_text: string;
-  options: string[];
-  correct_answer: string;
-  explanation: string;
-  difficulty: string;
-}
+    interface MathProblem {
+      problem_text: string;
+      options: string[];
+      correct_answer: string;
+      explanation: string;
+      difficulty: string;
+    }
 
     return fetch(`${API_BASE_URL}/math/practice`, {
-        method: "POST",
-        headers,
-        body: formData
+      method: "POST",
+      headers,
+      body: formData
     }).then(res => apiClient.handleResponse<{ problems: MathProblem[]; success: boolean }>(res));
   }
 };
