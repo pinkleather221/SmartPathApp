@@ -63,24 +63,30 @@ const CareerDetail = () => {
   // Convert reasoning string to array of bullet points
   const reasoningArray = career?.reasoning
     ? career.reasoning
-        .split(/[.\n]/)
-        .map((r) => r.trim())
-        .filter((r) => r.length > 0)
+      .split(/[.\n]/)
+      .map((r) => r.trim())
+      .filter((r) => r.length > 0)
     : [];
 
   // Transform universities from string array to objects
   const universities = career?.suitable_universities?.map((uniName, index) => {
-    const requirements = career.course_requirements
+    const requirementsEntries = career.course_requirements
       ? Object.entries(career.course_requirements)
-          .map(([subject, grade]) => `${subject} (${grade})`)
-          .join(", ")
+      : [];
+
+    const hasRequirements = requirementsEntries.length > 0;
+
+    const requirements = hasRequirements
+      ? requirementsEntries
+        .map(([subject, grade]) => `${subject} (${grade})`)
+        .join(", ")
       : "Check university website for requirements";
 
     return {
       name: uniName,
       course: `${career.career_path} related program`,
-      minGrade: career.course_requirements
-        ? Object.values(career.course_requirements)[0] || "C+"
+      minGrade: hasRequirements
+        ? requirementsEntries[0][1] || "C+"
         : "C+",
       requirements: requirements,
     };

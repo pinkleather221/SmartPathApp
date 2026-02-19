@@ -10,6 +10,17 @@ import { Progress } from "@/components/ui/progress";
 import { Plus, Search, Eye, Trash2, Calendar, Loader2, AlertCircle } from "lucide-react";
 import { flashcardsApi } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 const Flashcards = () => {
   const { toast } = useToast();
@@ -36,6 +47,24 @@ const Flashcards = () => {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    try {
+      await flashcardsApi.delete(id);
+      toast({
+        title: "Flashcard deleted",
+        description: "The flashcard has been deleted successfully.",
+        duration: 3000,
+      });
+      loadFlashcards();
+    } catch (error) {
+      toast({
+        title: "Error deleting flashcard",
+        description: error instanceof Error ? error.message : "Failed to delete flashcard",
+        variant: "destructive",
+      });
     }
   };
 
@@ -97,7 +126,7 @@ const Flashcards = () => {
             <CardHeader className="pb-2">
               <CardDescription>Average Mastery</CardDescription>
               <CardTitle className="text-3xl text-success">
-                {loading ? "..." : flashcards.length > 0 
+                {loading ? "..." : flashcards.length > 0
                   ? Math.round(flashcards.reduce((sum, c) => sum + (c.mastery_level || 0), 0) / flashcards.length) + "%"
                   : "0%"}
               </CardTitle>
@@ -219,30 +248,30 @@ const Flashcards = () => {
                         Review
                       </Button>
                     </Link>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={async () => {
-                        if (window.confirm("Are you sure you want to delete this flashcard?")) {
-                          try {
-                            await flashcardsApi.delete(card.card_id || card.flashcard_id);
-                            toast({
-                              title: "Flashcard deleted",
-                              description: "The flashcard has been deleted successfully.",
-                            });
-                            loadFlashcards();
-                          } catch (error) {
-                            toast({
-                              title: "Error deleting flashcard",
-                              description: error instanceof Error ? error.message : "Failed to delete flashcard",
-                              variant: "destructive",
-                            });
-                          }
-                        }
-                      }}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="destructive" size="sm">
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Delete Flashcard</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Are you sure you want to delete this flashcard? This action cannot be undone.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => handleDelete(card.card_id || card.flashcard_id)}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          >
+                            Delete
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   </div>
                 </CardContent>
               </Card>

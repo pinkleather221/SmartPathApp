@@ -247,7 +247,11 @@ const StudyPlanDetail = () => {
                 </div>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" onClick={handleEditPlan}>
+                <Button
+                  variant="outline"
+                  onClick={handleEditPlan}
+                  disabled={getStatusLabel(plan) === "Completed"}
+                >
                   <Edit className="w-4 h-4 mr-2" />
                   Edit Plan
                 </Button>
@@ -393,7 +397,7 @@ const StudyPlanDetail = () => {
                   <h2 className="text-xl font-semibold">Weekly Schedule</h2>
                   <Dialog open={logSessionOpen} onOpenChange={setLogSessionOpen}>
                     <DialogTrigger asChild>
-                      <Button>
+                      <Button disabled={getStatusLabel(plan) === "Completed"}>
                         <Plus className="w-4 h-4 mr-2" />
                         Log Session
                       </Button>

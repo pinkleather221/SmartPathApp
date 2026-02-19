@@ -24,6 +24,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 from models import (
+    UserType,
     UserRegister, UserLogin, Token, UserProfile, UserProfileUpdate,
     ReportUpload, ReportResponse, ReportAnalysis,
     PerformanceDashboard, GradeTrend, PerformancePrediction,
@@ -1591,9 +1592,10 @@ async def generate_invite_code(
 ):
     """Generate an invite code for linking students. Only for teachers and parents."""
     try:
+        creator_type = UserType(current_user['user_type'].lower())
         invite = InviteService.create_invite_code(
             creator_id=current_user['user_id'],
-            creator_type=current_user['user_type']
+            creator_type=creator_type
         )
         return InviteCodeResponse.model_validate(invite)
     except ValueError as e:
