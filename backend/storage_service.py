@@ -63,6 +63,16 @@ class SupabaseStorageProvider(StorageProvider):
         from config import supabase
         self.client = supabase
         self.bucket = bucket_name
+        # Verify bucket exists on startup
+        try:
+            buckets = self.client.storage.list_buckets()
+            bucket_names = [b.name for b in buckets]
+            if self.bucket not in bucket_names:
+                logger.warning(f"Supabase bucket '{self.bucket}' not found. Available: {bucket_names}")
+            else:
+                logger.info(f"Supabase Storage connected to bucket '{self.bucket}'")
+        except Exception as e:
+            logger.warning(f"Could not verify Supabase bucket: {e}")
 
     async def upload_file(self, file: UploadFile, path: str) -> str:
         if not self.client:
@@ -78,20 +88,22 @@ class SupabaseStorageProvider(StorageProvider):
         
         try:
             # Upload to bucket
+            logger.info(f"Uploading '{unique_path}' to Supabase bucket '{self.bucket}' ({len(content)} bytes)")
             response = self.client.storage.from_(self.bucket).upload(
                 path=unique_path,
                 file=content,
-                file_options={"content-type": file.content_type}
+                file_options={"content-type": file.content_type or "application/octet-stream"}
             )
             
             # Get public URL
             public_url = self.client.storage.from_(self.bucket).get_public_url(unique_path)
+            logger.info(f"Upload successful: {public_url}")
             return public_url
         except Exception as e:
             logger.error(f"Supabase upload failed: {e}")
             raise e
         finally:
-            await file.seek(0) # Reset file pointer if needed elsewhere
+            file.file.seek(0)  # Reset file pointer if needed elsewhere
 
     async def delete_file(self, path: str) -> bool:
         if not self.client:
@@ -115,10 +127,12 @@ def get_storage_provider() -> StorageProvider:
     # Use environment variable or config setting
     storage_type = os.getenv("STORAGE_TYPE", "local").lower()
     
-    if storage_type == "supabase" and settings.is_production:
+    if storage_type == "supabase":
+        logger.info("Using Supabase Storage provider")
         return SupabaseStorageProvider()
     
     # Default to local for dev or fallback
+    logger.info("Using Local Storage provider")
     return LocalStorageProvider(settings.UPLOAD_DIR)
 
 storage_service = get_storage_provider()
