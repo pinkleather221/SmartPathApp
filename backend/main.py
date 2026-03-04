@@ -56,7 +56,7 @@ from auth import (
     get_password_hash, require_user_type
 )
 from supabase_db import (
-    get_user_by_email, create_user, get_user_insights, delete_academic_report,
+    get_user_by_email, create_user, update_user, get_user_insights, delete_academic_report,
     delete_flashcard, update_career_recommendation, delete_career_recommendation,
     delete_study_plan,
     create_resource, update_resource, delete_resource, get_resource, list_resources,
@@ -467,8 +467,8 @@ async def update_profile(
             detail="Failed to update profile"
         )
 
-    # Transform user data for Pydantic validation
-    user_data = current_user.copy()
+    # Transform updated user data for Pydantic validation
+    user_data = updated_user.copy()
     user_data.pop('_sa_instance_state', None)  # Remove SQLAlchemy internal state
     if 'user_type' in user_data and isinstance(user_data['user_type'], str):
         user_data['user_type'] = user_data['user_type'].lower()
