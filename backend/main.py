@@ -60,7 +60,7 @@ from supabase_db import (
     delete_flashcard, update_career_recommendation, delete_career_recommendation,
     delete_study_plan,
     create_resource, update_resource, delete_resource, get_resource, list_resources,
-    favorite_resource, unfavorite_resource
+    favorite_resource, unfavorite_resource, update_user
 )
 from services import (
     ReportService, PerformanceService, FlashcardService,
@@ -1837,12 +1837,13 @@ async def root():
         "docs": "/docs"
     }
 
-
 if __name__ == "__main__":
+    import os
     import uvicorn
+    port = int(os.environ.get("PORT", 8000))
     uvicorn.run(
         "main:app",
-        host=settings.HOST,
-        port=settings.PORT,
-        reload=settings.DEBUG
+        host="0.0.0.0",
+        port=port,
+        reload=False
     )
