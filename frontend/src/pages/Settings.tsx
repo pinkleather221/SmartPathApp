@@ -103,12 +103,12 @@ const ConnectionsSection = ({ userType }: { userType?: string }) => {
           <CardHeader>
             <CardTitle>Invite Code</CardTitle>
             <CardDescription>
-              Generate an invite code to share with your {userType === "teacher" ? "students" : "child"}. 
+              Generate an invite code to share with your {userType === "teacher" ? "students" : "child"}.
               They can enter this code to link their account to yours.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Button 
+            <Button
               onClick={() => generateCodeMutation.mutate()}
               disabled={generateCodeMutation.isPending}
             >
@@ -129,7 +129,7 @@ const ConnectionsSection = ({ userType }: { userType?: string }) => {
               <div className="space-y-3 mt-4">
                 <h4 className="font-medium text-sm text-muted-foreground">Your Invite Codes</h4>
                 {myCodes.map((code: InviteCode) => (
-                  <div 
+                  <div
                     key={code.code_id}
                     className="flex items-center justify-between p-3 rounded-lg border"
                   >
@@ -146,8 +146,8 @@ const ConnectionsSection = ({ userType }: { userType?: string }) => {
                       )}
                     </div>
                     {!code.used && new Date(code.expires_at) > new Date() && (
-                      <Button 
-                        variant="ghost" 
+                      <Button
+                        variant="ghost"
                         size="sm"
                         onClick={() => copyToClipboard(code.code)}
                       >
@@ -186,7 +186,7 @@ const ConnectionsSection = ({ userType }: { userType?: string }) => {
         <CardHeader>
           <CardTitle>Enter Invite Code</CardTitle>
           <CardDescription>
-            Enter an invite code from your teacher or parent to link your accounts. 
+            Enter an invite code from your teacher or parent to link your accounts.
             This allows them to view your academic progress.
           </CardDescription>
         </CardHeader>
@@ -199,7 +199,7 @@ const ConnectionsSection = ({ userType }: { userType?: string }) => {
               maxLength={8}
               className="font-mono text-lg tracking-wider"
             />
-            <Button 
+            <Button
               onClick={() => redeemCodeMutation.mutate(inviteCode)}
               disabled={inviteCode.length !== 8 || redeemCodeMutation.isPending}
             >
@@ -233,7 +233,7 @@ const ConnectionsSection = ({ userType }: { userType?: string }) => {
           ) : linkedGuardians && linkedGuardians.length > 0 ? (
             <div className="space-y-3">
               {linkedGuardians.map((guardian: LinkedGuardian) => (
-                <div 
+                <div
                   key={guardian.user_id}
                   className="flex items-center justify-between p-3 rounded-lg border"
                 >
@@ -264,14 +264,14 @@ const Settings = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
-  
+
   // Get active tab from URL, default to "profile"
   const activeTab = searchParams.get("tab") || "profile";
-  
+
   const handleTabChange = (value: string) => {
     setSearchParams({ tab: value });
   };
-  
+
   // Fetch current user profile
   const { data: user, isLoading } = useQuery({
     queryKey: ["currentUser"],
@@ -467,39 +467,37 @@ const Settings = () => {
 
                 <Separator />
 
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Grade Level</label>
-                    <Select value={gradeLevel} onValueChange={setGradeLevel}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {getGradeOptions().map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Curriculum</label>
-                    <Select value={curriculum} onValueChange={handleCurriculumChange}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="cbe">CBE</SelectItem>
-                        <SelectItem value="8-4-4">8-4-4</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Grade Level</label>
+                  <Select value={gradeLevel} onValueChange={setGradeLevel}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {getGradeOptions().map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
-                <Button 
-                  onClick={handleSaveProfile} 
+                {/* <div className="space-y-2">
+                  <label className="text-sm font-medium">Curriculum</label>
+                  <Select value={curriculum} onValueChange={handleCurriculumChange}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cbe">CBE</SelectItem>
+                      <SelectItem value="8-4-4">8-4-4</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div> */}
+
+                <Button
+                  onClick={handleSaveProfile}
                   className="w-full"
                   disabled={updateProfileMutation.isPending || isLoading}
                 >
