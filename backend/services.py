@@ -2,7 +2,7 @@
 Core business logic services for SmartPath.
 Handles grade analysis, career matching, study planning, and more.
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import typing
 from typing import Dict, List, Optional, Tuple
 
@@ -942,7 +942,7 @@ class InviteService:
         if invite['used']:
             raise ValueError("This invite code has already been used")
         
-        if datetime.fromisoformat(invite['expires_at']) < datetime.utcnow():
+        if datetime.fromisoformat(invite['expires_at']).replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
             raise ValueError("This invite code has expired")
         
         # Verify the redeemer is a student
