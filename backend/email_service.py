@@ -100,7 +100,7 @@ class EmailService:
 
     async def send_reset_password_email(self, email: str, token: str):
         """Send password reset email."""
-        # In production, this would be your frontend URL
+        
         reset_link = f"http://localhost:5173/reset-password?token={token}"
         
         subject = "Reset Your Password - SmartPath"
